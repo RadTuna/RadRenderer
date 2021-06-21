@@ -1,0 +1,8 @@
+###########################
+# Rad Renderer git ignore #
+###########################
+
+/.vs
+/Binaries
+/Intermediate
+/vcpkg
