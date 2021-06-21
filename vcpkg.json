@@ -1,0 +1,12 @@
+{
+    "name": "radrenderer",
+    "version-string": "0.0.1",
+    "dependencies": [
+        "vulkan",
+        "imgui",
+        "glm",
+        "glfw3",
+        "sail",
+        "assimp"
+    ]
+}
