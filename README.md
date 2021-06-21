@@ -4,7 +4,7 @@ Vulkan 라이브러리를 활용 한 크로스 플랫폼 렌더러입니다.
 Windows, Linux 지원을 목표로 하고 있습니다.
 
 ## Preparations
-Rad Renderer를 빌드하기 위해서는 다음과 같은 소프트웨어가 필요합니다.
+Rad Renderer를 빌드하기 위해서는 다음과 같은 소프트웨어가 필요합니다.  
 CMake 3.8 or later: https://cmake.org/download/  
 Git: https://git-scm.com/downloads  
 
