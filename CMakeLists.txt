@@ -1,6 +1,6 @@
-###########################
+###################################
 # CMake settings for rad renderer #
-###########################
+###################################
 
 # required cmake over 3.8 ver
 cmake_minimum_required(VERSION 3.8)
@@ -28,6 +28,7 @@ source_group(TREE ${SOURCE_DIR} PREFIX "Source" FILES ${ALL_FILES})
 # set relevant build properties
 set(CMAKE_OUTPUT_NAME ${PROJECT_NAME})
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${BINARY_DIR})
+set(CMAKE_SUPPRESS_REGENERATION true)
 
 # set executable
 add_executable(${PROJECT_NAME} ${ALL_FILES})
