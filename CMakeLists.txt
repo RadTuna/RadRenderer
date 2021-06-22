@@ -30,14 +30,19 @@ set(CMAKE_OUTPUT_NAME ${PROJECT_NAME})
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${BINARY_DIR})
 set(CMAKE_SUPPRESS_REGENERATION true)
 
+set(CONAN_DIR ${CMAKE_CURRENT_SOURCE_DIR}/Conan)
+include(${CONAN_DIR}/conanbuildinfo.cmake)
+conan_basic_setup(TARGETS)
+
 # set executable
 add_executable(${PROJECT_NAME} ${ALL_FILES})
 
 # link conan packages
-set(CONAN_DIR ${CMAKE_CURRENT_SOURCE_DIR}/Conan)
-include(${CONAN_DIR}/conanbuildinfo.cmake)
-conan_basic_setup()
-target_link_libraries(${PROJECT_NAME} ${CONAN_LIBS})
+target_link_libraries(${PROJECT_NAME} CONAN_PKG::assimp)
+target_link_libraries(${PROJECT_NAME} CONAN_PKG::imgui)
+target_link_libraries(${PROJECT_NAME} CONAN_PKG::glm)
+target_link_libraries(${PROJECT_NAME} CONAN_PKG::glfw)
+target_link_libraries(${PROJECT_NAME} CONAN_PKG::openimageio)
 
 # link vulkan sdk
 find_package(Vulkan REQUIRED)
