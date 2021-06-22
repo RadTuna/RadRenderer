@@ -28,11 +28,14 @@ source_group(TREE ${SOURCE_DIR} PREFIX "Source" FILES ${ALL_FILES})
 # set relevant build properties
 set(CMAKE_OUTPUT_NAME ${PROJECT_NAME})
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${BINARY_DIR})
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${BINARY_DIR})
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${BINARY_DIR})
 set(CMAKE_SUPPRESS_REGENERATION true)
 
+#include conan package
 set(CONAN_DIR ${CMAKE_CURRENT_SOURCE_DIR}/Conan)
 include(${CONAN_DIR}/conanbuildinfo.cmake)
-conan_basic_setup(TARGETS)
+conan_basic_setup(TARGETS NO_OUTPUT_DIRS)
 
 # set executable
 add_executable(${PROJECT_NAME} ${ALL_FILES})
