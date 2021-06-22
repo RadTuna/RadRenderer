@@ -14,9 +14,9 @@ Conan package manager: https://conan.io
 1. InstallDependencies.bat or .sh 를 실행하여 종속된 라이브러리를 설치합니다.  
 2. GenerateProject.bat or .sh 를 실행하여 Makefile을 구성합니다.  
 3. 플랫폼에 따라 다음과 같이 빌드를 수행합니다.
-    - Common: CMake의 cmake --build 명령을 사용해서 빌드합니다.  
+    - Common: Intermediate 폴더에서 CMake의 cmake --build . 명령을 사용해서 빌드합니다.  
     - Windows: Intermediate 폴더 안에 존재하는 .sln 파일을 실행하여 VS를 이용해 빌드합니다.  
-    - Linux: Shell의 make 명령을 사용해서 빌드합니다.  
+    - Linux: Intermediate 폴더에서 Shell의 make 명령을 사용해서 빌드합니다.  
 
 ## Libraries
 Vulkan: https://www.vulkan.org/   
