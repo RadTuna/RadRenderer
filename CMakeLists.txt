@@ -33,27 +33,11 @@ set(CMAKE_SUPPRESS_REGENERATION true)
 # set executable
 add_executable(${PROJECT_NAME} ${ALL_FILES})
 
-# link package from vcpkg
-# assimp
-find_package(assimp CONFIG REQUIRED)
-include_directories(${assimp_INCLUDE_DIRS})
-target_link_libraries(${PROJECT_NAME} assimp::assimp)
-# glm
-find_package(glm CONFIG REQUIRED)
-include_directories(${glm_INCLUDE_DIRS})
-target_link_libraries(${PROJECT_NAME} glm::glm)
-# glfw3
-find_package(glfw3 CONFIG REQUIRED)
-include_directories(${glfw3_INCLUDE_DIRS})
-target_link_libraries(${PROJECT_NAME} glfw)
-# imgui
-find_package(imgui CONFIG REQUIRED)
-include_directories(${imgui_INCLUDE_DIRS})
-target_link_libraries(${PROJECT_NAME} imgui::imgui)
-# sail
-find_package(sail CONFIG REQUIRED)
-include_directories(${sail_INCLUDE_DIRS})
-target_link_libraries(${PROJECT_NAME} SAIL::sail)
+# link conan packages
+set(CONAN_DIR ${CMAKE_CURRENT_SOURCE_DIR}/Conan)
+include(${CONAN_DIR}/conanbuildinfo.cmake)
+conan_basic_setup()
+target_link_libraries(${PROJECT_NAME} ${CONAN_LIBS})
 
 # link vulkan sdk
 find_package(Vulkan REQUIRED)
