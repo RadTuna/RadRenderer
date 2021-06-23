@@ -5,7 +5,7 @@ class IModule
 public:
     IModule() { }
 
-    virtual void Initialize() = 0;
+    virtual bool Initialize() = 0;
     virtual void Loop() = 0;
     virtual void Deinitialize() = 0;
 

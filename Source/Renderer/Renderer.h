@@ -10,8 +10,14 @@ public:
     ~Renderer();
 
     // IModule interfaces...
-    void Initialize() override;
+    bool Initialize() override;
     void Loop() override;
     void Deinitialize() override;
+
+private:
+    bool CreateInstance();
+
+private:
+    struct VkInstance_T* mInstance;
 
 };

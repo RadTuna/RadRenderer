@@ -5,23 +5,29 @@
 // External Include
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
+#include <cassert>
 
 // Internal Include
 #include "Editor/Editor.h"
 #include "Renderer/Renderer.h"
+#include "World/World.h"
+#include "Logger.h"
 
 
-uint32_t Application::ScreenWidth = 800;
-uint32_t Application::ScreenHeight = 600;
-std::string Application::AppTitle = "RadRenderer";
+std::unique_ptr<Application> Application::ApplicationInstance = nullptr;
 
-Application::Application()
+Application::Application(uint32_t width, uint32_t height, const std::string& title)
     : mEditor(std::make_unique<Editor>())
     , mRenderer(std::make_unique<Renderer>())
+    , mWorld(std::make_unique<World>())
     , mWindow(nullptr)
+    , mWidth(width)
+    , mHeight(height)
+    , mAppTitle(title)
 {
     mModules.push_back(mEditor.get());
     mModules.push_back(mRenderer.get());
+    mModules.push_back(mWorld.get());
 
     InitializeWindow();
 }
@@ -31,11 +37,25 @@ Application::~Application()
     DeinitializeWindow();
 }
 
-void Application::Run()
+void Application::CreateApplication(uint32_t width, uint32_t height, const std::string& title)
 {
+    if (ApplicationInstance == nullptr)
+    {
+        // danger code!
+        ApplicationInstance = std::move(std::unique_ptr<Application>(new Application(width, height, title)));
+    }
+}
+
+bool Application::Run()
+{
+    Logger::LogStatic(ELogType::Core, ELogClass::Log, "Start application.");
+
     for (IModule* myModule : mModules)
     {
-        myModule->Initialize();
+        if (myModule->Initialize() == false)
+        {
+            return false;
+        }
     }
 
     while (glfwWindowShouldClose(mWindow) == false)
@@ -49,6 +69,10 @@ void Application::Run()
     {
         myModule->Deinitialize();
     }
+
+    Logger::LogStatic(ELogType::Core, ELogClass::Log, "End application.");
+
+    return true;
 }
 
 void Application::Loop()
@@ -61,6 +85,7 @@ void Application::Loop()
 
 void Application::InitializeWindow()
 {
+    Logger::LogStatic(ELogType::Core, ELogClass::Log, "Start window creation.");
     // pre setting for create window
     glfwInit();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -68,11 +93,13 @@ void Application::InitializeWindow()
 
     // create glfw window
     mWindow = glfwCreateWindow(
-        Application::ScreenWidth, 
-        Application::ScreenHeight, 
-        Application::AppTitle.c_str(),
+        mWidth, 
+        mHeight, 
+        mAppTitle.c_str(),
         nullptr, 
         nullptr);
+
+    Logger::LogStatic(ELogType::Core, ELogClass::Log, "Complete window creation.");
 }
 
 void Application::DeinitializeWindow()

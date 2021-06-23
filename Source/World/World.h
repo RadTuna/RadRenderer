@@ -4,11 +4,11 @@
 #include "Core/IModule.h"
 
 
-class Editor final : public IModule
+class World final : public IModule
 {
 public:
-    Editor();
-    ~Editor();
+    World();
+    ~World();
 
     // IModule interfaces...
     bool Initialize() override;
