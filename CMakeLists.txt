@@ -41,7 +41,13 @@ include(${CONAN_DIR}/conanbuildinfo.cmake)
 conan_basic_setup(TARGETS NO_OUTPUT_DIRS)
 
 # set executable
-add_executable(${PROJECT_NAME} ${ALL_FILES})
+if (WIN32)
+    add_executable(${PROJECT_NAME} WIN32 ${ALL_FILES})
+elseif (LINUX)
+    add_executable(${PROJECT_NAME} ${ALL_FILES})
+else()
+    message(FATEL_ERROR "You can build cmake from this platform")
+endif()
 
 # link conan packages
 target_link_libraries(${PROJECT_NAME} CONAN_PKG::assimp)

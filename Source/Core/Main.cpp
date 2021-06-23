@@ -1,7 +1,13 @@
 
 #include "Application.h"
 
-int main(int argc, char* argv[])
+#if defined WIN32
+#define CROSS_MAIN WinMain
+#else
+#define CROSS_MAIN main
+#endif
+
+int CROSS_MAIN(int argc, char* argv[])
 {
     Application app;
 
