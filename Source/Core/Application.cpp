@@ -48,7 +48,7 @@ void Application::CreateApplication(uint32_t width, uint32_t height, const std::
 
 bool Application::Run()
 {
-    Logger::LogStatic(ELogType::Core, ELogClass::Log, "Start application.");
+    RAD_LOG(ELogType::Core, ELogClass::Log, "Start application.");
 
     for (IModule* myModule : mModules)
     {
@@ -70,7 +70,7 @@ bool Application::Run()
         myModule->Deinitialize();
     }
 
-    Logger::LogStatic(ELogType::Core, ELogClass::Log, "End application.");
+    RAD_LOG(ELogType::Core, ELogClass::Log, "End application.");
 
     return true;
 }
@@ -85,7 +85,7 @@ void Application::Loop()
 
 void Application::InitializeWindow()
 {
-    Logger::LogStatic(ELogType::Core, ELogClass::Log, "Start window creation.");
+    RAD_LOG(ELogType::Core, ELogClass::Log, "Start window creation.");
     // pre setting for create window
     glfwInit();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -99,7 +99,7 @@ void Application::InitializeWindow()
         nullptr, 
         nullptr);
 
-    Logger::LogStatic(ELogType::Core, ELogClass::Log, "Complete window creation.");
+    RAD_LOG(ELogType::Core, ELogClass::Log, "Complete window creation.");
 }
 
 void Application::DeinitializeWindow()

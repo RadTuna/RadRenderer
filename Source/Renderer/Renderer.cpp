@@ -22,7 +22,7 @@ Renderer::~Renderer()
 
 bool Renderer::Initialize()
 {
-    Logger::LogStatic(ELogType::Renderer, ELogClass::Log, "Start renderer module initialization.");
+    RAD_LOG(ELogType::Renderer, ELogClass::Log, "Start renderer module initialization.");
     bool bResult = true;
 
     bResult &= CreateInstance();
@@ -31,7 +31,7 @@ bool Renderer::Initialize()
         return false;
     }
 
-    Logger::LogStatic(ELogType::Renderer, ELogClass::Log, "Complete renderer module initialization.");
+    RAD_LOG(ELogType::Renderer, ELogClass::Log, "Complete renderer module initialization.");
     return true;
 }
 
@@ -41,9 +41,9 @@ void Renderer::Loop()
 
 void Renderer::Deinitialize()
 {
-    Logger::LogStatic(ELogType::Renderer, ELogClass::Log, "Start renderer module deinitialization.");
+    RAD_LOG(ELogType::Renderer, ELogClass::Log, "Start renderer module deinitialization.");
 
-    Logger::LogStatic(ELogType::Renderer, ELogClass::Log, "Complete renderer module deinitialization.");
+    RAD_LOG(ELogType::Renderer, ELogClass::Log, "Complete renderer module deinitialization.");
 }
 
 bool Renderer::CreateInstance()

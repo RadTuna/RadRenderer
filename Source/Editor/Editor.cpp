@@ -16,9 +16,9 @@ Editor::~Editor()
 
 bool Editor::Initialize()
 {
-    Logger::LogStatic(ELogType::Editor, ELogClass::Log, "Start editor module initialization.");
+    RAD_LOG(ELogType::Editor, ELogClass::Log, "Start editor module initialization.");
 
-    Logger::LogStatic(ELogType::Editor, ELogClass::Log, "Complete editor module initialization.");
+    RAD_LOG(ELogType::Editor, ELogClass::Log, "Complete editor module initialization.");
     return true;
 }
 
@@ -28,7 +28,7 @@ void Editor::Loop()
 
 void Editor::Deinitialize()
 {
-    Logger::LogStatic(ELogType::Editor, ELogClass::Log, "Start editor module deinitialization.");
+    RAD_LOG(ELogType::Editor, ELogClass::Log, "Start editor module deinitialization.");
 
-    Logger::LogStatic(ELogType::Editor, ELogClass::Log, "Complete editor module deinitialization.");
+    RAD_LOG(ELogType::Editor, ELogClass::Log, "Complete editor module deinitialization.");
 }

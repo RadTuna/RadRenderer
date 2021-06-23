@@ -10,12 +10,7 @@
 
 int CROSS_MAIN(int argc, char* argv[])
 {
-    Logger::CreateLogger("D:/RadRenderer/Logs", "RadRenderer_log.txt");
-    Logger* logger = Logger::GetLoggerOrNull();
-    if (logger == nullptr)
-    {
-        return EXIT_FAILURE;
-    }
+    SETUP_RAD_LOGGER("D:/RadRenderer/Logs", "RadRenderer_log.txt");
 
     Application::CreateApplication(1280, 720, "RadRenderer");
     Application* app = Application::GetApplicationOrNull();
@@ -30,7 +25,6 @@ int CROSS_MAIN(int argc, char* argv[])
         return EXIT_FAILURE;
     }
 
-    logger->PrintLog();
-
+    PRINT_RAD_LOGGER();
     return EXIT_SUCCESS;
 }

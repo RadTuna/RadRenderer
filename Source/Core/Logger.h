@@ -1,5 +1,6 @@
 #pragma once
 
+#if defined _DEBUG
 // External Include
 #include <vector>
 #include <string>
@@ -51,7 +52,7 @@ public:
     static Logger* GetLoggerOrNull() { return LoggerInstance.get(); }
 
     static void LogStatic(ELogType logType, ELogClass logClass, const std::string logBody);
-    static void LogQuick(const std::string logBody);
+    static void PrintLogStatic();
 
     void Log(ELogType logType, ELogClass logClass, const std::string logBody);
     void PrintLog() const;
@@ -68,3 +69,28 @@ private:
     std::string mLogName;
 
 };
+#endif
+
+#if defined _DEBUG
+#define RAD_LOG(LogType, LogClass, LogBody) Logger::LogStatic(LogType, LogClass, LogBody)
+#else
+#define RAD_LOG(LogType, LogClass, LogBody)
+#endif
+
+#if defined _DEBUG
+#define RAD_QLOG(LogBody) Logger::LogStatic(ELogType::Unknown, ELogClass::Log, LogBody)
+#else
+#define RAD_QLOG(LogBody)
+#endif
+
+#if defined _DEBUG
+#define SETUP_RAD_LOGGER(LogPath, LogName) Logger::CreateLogger(LogPath, LogName)
+#else
+#define SETUP_RAD_LOGGER(LogPath, LogName)
+#endif
+
+#if defined _DEBUG
+#define PRINT_RAD_LOGGER() Logger::PrintLogStatic()
+#else
+#define PRINT_RAD_LOGGER()
+#endif

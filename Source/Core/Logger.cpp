@@ -1,4 +1,5 @@
 
+#if defined _DEBUG
 // Primary Include
 #include "Logger.h"
 
@@ -36,9 +37,12 @@ void Logger::LogStatic(ELogType logType, ELogClass logClass, const std::string l
     }
 }
 
-void Logger::LogQuick(const std::string logBody)
+void Logger::PrintLogStatic()
 {
-    LogStatic(ELogType::Unknown, ELogClass::Log, logBody);
+    if (LoggerInstance != nullptr)
+    {
+        LoggerInstance->PrintLog();
+    }
 }
 
 void Logger::Log(ELogType logType, ELogClass logClass, const std::string logBody)
@@ -77,3 +81,4 @@ void Logger::PrintLog() const
 
     fileOut.close();
 }
+#endif
