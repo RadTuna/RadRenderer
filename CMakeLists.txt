@@ -32,6 +32,9 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${BINARY_DIR})
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${BINARY_DIR})
 set(CMAKE_SUPPRESS_REGENERATION true)
 
+#include source
+include_directories(${SOURCE_DIR})
+
 #include conan package
 set(CONAN_DIR ${CMAKE_CURRENT_SOURCE_DIR}/Conan)
 include(${CONAN_DIR}/conanbuildinfo.cmake)
