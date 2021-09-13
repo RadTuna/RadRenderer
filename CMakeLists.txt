@@ -46,7 +46,7 @@ if (WIN32)
 elseif (LINUX)
     add_executable(${PROJECT_NAME} ${ALL_FILES})
 else()
-    message(FATEL_ERROR "You can build cmake from this platform")
+    message(FATEL_ERROR "You can't build cmake from this platform")
 endif()
 
 # link conan packages

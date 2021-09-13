@@ -1,6 +1,8 @@
 #pragma once
 
-#if defined _DEBUG
+#include <cassert>
+
+#if !defined NDEBUG
 // External Include
 #include <vector>
 #include <string>
@@ -31,15 +33,13 @@ enum class ELogClass
     Log = 0,
     Warning,
     Error,
-    FatalError,
-    Count = 4
+    Count = 3
 };
 
 constexpr char* LogClassStringTable[static_cast<uint32_t>(ELogClass::Count)] = {
     "Log",
     "Warning",
-    "Error",
-    "FatalError"
+    "Error"
 };
 
 class Logger final
@@ -71,26 +71,15 @@ private:
 };
 #endif
 
-#if defined _DEBUG
-#define RAD_LOG(LogType, LogClass, LogBody) Logger::LogStatic(LogType, LogClass, LogBody)
-#else
+
+#if defined NDEBUG
 #define RAD_LOG(LogType, LogClass, LogBody)
-#endif
-
-#if defined _DEBUG
-#define RAD_QLOG(LogBody) Logger::LogStatic(ELogType::Unknown, ELogClass::Log, LogBody)
-#else
 #define RAD_QLOG(LogBody)
-#endif
-
-#if defined _DEBUG
-#define SETUP_RAD_LOGGER(LogPath, LogName) Logger::CreateLogger(LogPath, LogName)
-#else
 #define SETUP_RAD_LOGGER(LogPath, LogName)
-#endif
-
-#if defined _DEBUG
-#define PRINT_RAD_LOGGER() Logger::PrintLogStatic()
-#else
 #define PRINT_RAD_LOGGER()
+#else
+#define RAD_LOG(LogType, LogClass, LogBody) Logger::LogStatic(LogType, LogClass, LogBody)
+#define RAD_QLOG(LogBody) Logger::LogStatic(ELogType::Unknown, ELogClass::Log, LogBody)
+#define SETUP_RAD_LOGGER(LogPath, LogName) Logger::CreateLogger(LogPath, LogName)
+#define PRINT_RAD_LOGGER() Logger::PrintLogStatic()
 #endif
