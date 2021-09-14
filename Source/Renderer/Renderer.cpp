@@ -46,6 +46,7 @@ void DestroyDebugUtilsMessengerEXT(
 Renderer::Renderer()
     : mInstance(nullptr)
     , mbEnableValidationLayer(true)
+    , mPhysicalDevice(VK_NULL_HANDLE)
 {
     mValidationLayers.push_back(defaultValidationLayer);
 }
@@ -73,6 +74,18 @@ bool Renderer::Initialize()
     }
 #endif
 
+    bResult &= PickPhysicalDevice();
+    if (!bResult)
+    {
+        return false;
+    }
+
+    bResult &= CreateLogicalDevice();
+    if (!bResult)
+    {
+        return false;
+    }
+
     RAD_LOG(ELogType::Renderer, ELogClass::Log, "Complete renderer module initialization.");
     return true;
 }
@@ -93,6 +106,7 @@ void Renderer::Deinitialize()
 #endif
 
     vkDestroyInstance(mInstance, nullptr);
+    vkDestroyDevice(mDevice, nullptr);
 
     RAD_LOG(ELogType::Renderer, ELogClass::Log, "Complete renderer module deinitialization.");
 }
@@ -138,7 +152,8 @@ bool Renderer::CreateInstance()
     VkResult result = vkCreateInstance(&instanceCreateInfo, nullptr, &mInstance);
     if (result != VK_SUCCESS)
     {
-        return false; // VK 인스턴스가 정상 생성되지 않음.
+        RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to create Vulkan instance.");
+        return false;
     }
 
     uint32_t vkExtensionCount = 0;
@@ -154,9 +169,10 @@ bool Renderer::CreateInstance()
             });
         if (iterator == mVkExtensions.end())
         {
-            return false; // GLFW에서 필요한 Extension이 없음.
+            RAD_LOG(ELogType::Renderer, ELogClass::Error, "Required Vulkan extension does not exist");
+            return false;
         }
-        }
+    }
 
     uint32_t vkLayerCount = 0;
     vkEnumerateInstanceLayerProperties(&vkLayerCount, nullptr);
@@ -165,7 +181,8 @@ bool Renderer::CreateInstance()
 #if !defined NDEBUG 
     if (mbEnableValidationLayer && !CheckValidationLayerSupport())
     {
-        return false; // validation layer를 사용하고자 했으나 해당 layer가 없음.
+        RAD_LOG(ELogType::Renderer, ELogClass::Error, "Tried to use the validation layer, but does not exist.");
+        return false;
     }
 #endif
     
@@ -181,12 +198,93 @@ bool Renderer::CreateDebugMessenger()
     VkResult result = CreateDebugUtilsMessengerEXT(mInstance, &createInfo, nullptr, &mDebugMessenger);
     if (result != VK_SUCCESS)
     {
+        RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to create Vulkan debug messenger.");
         return false;
     }
 
     return true;
 }
 #endif
+
+bool Renderer::PickPhysicalDevice()
+{
+    uint32_t deviceCount = 0;;
+    vkEnumeratePhysicalDevices(mInstance, &deviceCount, nullptr);
+    if (deviceCount == 0)
+    {
+        RAD_LOG(ELogType::Renderer, ELogClass::Error, "There are no graphics devices that support Vulkan.");
+        return false;
+    }
+
+    std::vector<VkPhysicalDevice> vkDevices(deviceCount);
+    vkEnumeratePhysicalDevices(mInstance, &deviceCount, vkDevices.data());
+    for (VkPhysicalDevice device : vkDevices)
+    {
+        if (IsDeviceSuitable(device))
+        {
+            mPhysicalDevice = device; // get first suitable device.
+            break;
+        }
+    }
+
+    if (mPhysicalDevice == VK_NULL_HANDLE)
+    {
+        RAD_LOG(ELogType::Renderer, ELogClass::Error, "Falied to find a suitable GPU.");
+        return false;
+    }
+
+    return true;
+}
+
+bool Renderer::CreateLogicalDevice()
+{
+    QueueFamilyIndices indices = FindQueueFamily(mPhysicalDevice);
+    if (indices.GraphicFamily.has_value() == false)
+    {
+        return false;
+    }
+
+    VkDeviceQueueCreateInfo queueCreateInfo = {};
+    queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    queueCreateInfo.queueFamilyIndex = indices.GraphicFamily.value();
+    queueCreateInfo.queueCount = 1;
+    float queuePriority = 1.f;
+    queueCreateInfo.pQueuePriorities = &queuePriority;
+
+    VkPhysicalDeviceFeatures deviceFeatures = {};
+
+    VkDeviceCreateInfo deviceCreateInfo = {};
+    deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    deviceCreateInfo.pQueueCreateInfos = &queueCreateInfo;
+    deviceCreateInfo.queueCreateInfoCount = 1;
+    deviceCreateInfo.pEnabledFeatures = &deviceFeatures;
+
+    deviceCreateInfo.enabledExtensionCount = 0;
+#if !defined NDEBUG
+    if (mbEnableValidationLayer)
+    {
+        deviceCreateInfo.enabledLayerCount = static_cast<uint32_t>(mValidationLayers.size());
+        deviceCreateInfo.ppEnabledLayerNames = mValidationLayers.data();
+    }
+    else
+    {
+        deviceCreateInfo.enabledLayerCount = 0;
+    }
+#else
+    deviceCreateInfo.enabledLayerCount = 0;
+#endif
+
+    VkResult result = vkCreateDevice(mPhysicalDevice, &deviceCreateInfo, nullptr, &mDevice);
+    if (result != VK_SUCCESS)
+    {
+        RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to create Vulkan logical device.");
+        return false;
+    }
+
+    vkGetDeviceQueue(mDevice, indices.GraphicFamily.value(), 0, &mGraphicsQueue);
+
+    return true;
+}
 
 bool Renderer::CheckValidationLayerSupport()
 {
@@ -235,10 +333,49 @@ void Renderer::PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoE
     createInfo.pUserData = nullptr;
 }
 
+bool Renderer::IsDeviceSuitable(VkPhysicalDevice physicalDevice)
+{
+    VkPhysicalDeviceProperties deviceProperties;
+    vkGetPhysicalDeviceProperties(physicalDevice, &deviceProperties);
+
+    VkPhysicalDeviceFeatures deviceFeatures;
+    vkGetPhysicalDeviceFeatures(physicalDevice, &deviceFeatures);
+
+    QueueFamilyIndices indices = FindQueueFamily(physicalDevice);
+
+    const bool bHasGraphicQueueFamily = indices.GraphicFamily.has_value();
+    const bool bDiscreteGPU = deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
+    const bool bSupportGeometryShader = deviceFeatures.geometryShader;
+
+    return bHasGraphicQueueFamily && bDiscreteGPU && bSupportGeometryShader;
+}
+
+QueueFamilyIndices Renderer::FindQueueFamily(VkPhysicalDevice physicalDevice)
+{
+    QueueFamilyIndices indices;
+    uint32_t queueFamilyCount = 0;
+    vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, nullptr);
+
+    std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+    vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, queueFamilies.data());
+
+    for (int i = 0; i < queueFamilies.size(); ++i)
+    {
+        const VkQueueFamilyProperties& queueFamily = queueFamilies[i];
+        if ((queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0)
+        {
+            indices.GraphicFamily = i;
+            break;
+        }
+    }
+
+    return indices;
+}
+
 VKAPI_ATTR VkBool32 VKAPI_CALL Renderer::OnVkDebugLog(
-    VkDebugUtilsMessageSeverityFlagBitsEXT messageServerity, 
-    VkDebugUtilsMessageTypeFlagsEXT messageType, 
-    const VkDebugUtilsMessengerCallbackDataEXT* pCallBackData, 
+    VkDebugUtilsMessageSeverityFlagBitsEXT messageServerity,
+    VkDebugUtilsMessageTypeFlagsEXT messageType,
+    const VkDebugUtilsMessengerCallbackDataEXT* pCallBackData,
     void* pUserData)
 {
     ELogClass logClass = ELogClass::Log;
