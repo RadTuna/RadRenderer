@@ -4,6 +4,8 @@
 #include <memory>
 #include <vector>
 #include <string>
+#define GLFW_INCLUDE_VULKAN
+#include <GLFW/glfw3.h>
 
 class Application final
 {
@@ -23,6 +25,7 @@ public:
     uint32_t GetWidth() const { return mWidth; }
     uint32_t GetHeight() const { return mHeight; }
     const std::string& GetAppTitle() const { return mAppTitle; }
+    GLFWwindow* GetWindowObject() const { return mWindow; }
 
 private:
     Application(uint32_t width, uint32_t height, const std::string& title);
@@ -41,7 +44,7 @@ private:
     std::unique_ptr<class Renderer> mRenderer;
     std::unique_ptr<class World> mWorld;
 
-    struct GLFWwindow* mWindow;
+    GLFWwindow* mWindow;
 
     const std::string mAppTitle;
     uint32_t mWidth;
