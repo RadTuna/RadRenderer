@@ -134,6 +134,12 @@ void Renderer::Deinitialize()
     }
 #endif
 
+    for (VkImageView imageView : mSwapChainImageViews)
+    {
+        vkDestroyImageView(mDevice, imageView, nullptr);
+    }
+
+    vkDestroySwapchainKHR(mDevice, mSwapChain, nullptr);
     vkDestroyDevice(mDevice, nullptr);
     vkDestroySurfaceKHR(mInstance, mSurface, nullptr);
     vkDestroyInstance(mInstance, nullptr);
@@ -397,7 +403,45 @@ bool Renderer::CreateSwapChain()
         return false;
     }
 
+    uint32_t swapImageCount = 0;
+    vkGetSwapchainImagesKHR(mDevice, mSwapChain, &swapImageCount, nullptr);
+    mSwapChainImages.resize(swapImageCount);
+    vkGetSwapchainImagesKHR(mDevice, mSwapChain, &swapImageCount, mSwapChainImages.data());
+
+
+    // Create swap chain image views
+    mSwapChainImageViews.resize(mSwapChainImages.size());
+    for (size_t i = 0; i < mSwapChainImages.size(); ++i)
+    {
+        VkImageViewCreateInfo imageViewCreateInfo = {};
+        imageViewCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        imageViewCreateInfo.image = mSwapChainImages[i];
+        imageViewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        imageViewCreateInfo.format = surfaceFormat.format;
+        imageViewCreateInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+        imageViewCreateInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+        imageViewCreateInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+        imageViewCreateInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+        imageViewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        imageViewCreateInfo.subresourceRange.baseMipLevel = 0;
+        imageViewCreateInfo.subresourceRange.levelCount = 1;
+        imageViewCreateInfo.subresourceRange.baseArrayLayer = 0;
+        imageViewCreateInfo.subresourceRange.layerCount = 1;
+
+        result = vkCreateImageView(mDevice, &imageViewCreateInfo, nullptr, &mSwapChainImageViews[i]);
+        if (result != VK_SUCCESS)
+        {
+            RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to create swap chain image view.");
+            return false;
+        }
+    }
+
     return true;
+}
+
+bool Renderer::CreateGraphicsPipeline()
+{
+    return false;
 }
 
 bool Renderer::CheckValidationLayerSupport() const
@@ -505,8 +549,9 @@ QueueFamilyIndices Renderer::FindQueueFamily(VkPhysicalDevice physicalDevice) co
     std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
     vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, queueFamilies.data());
 
-    for (int i = 0; i < queueFamilies.size(); ++i)
+    for (size_t i = 0; i < queueFamilies.size(); ++i)
     {
+        const uint32_t index = static_cast<uint32_t>(i);
         if (IsValidQueueFamilyIndices(indices) == true)
         {
             break;
@@ -515,14 +560,14 @@ QueueFamilyIndices Renderer::FindQueueFamily(VkPhysicalDevice physicalDevice) co
         const VkQueueFamilyProperties& queueFamily = queueFamilies[i];
         if ((queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0)
         {
-            indices.GraphicFamily = i;
+            indices.GraphicFamily = index;
         }
 
         VkBool32 bSupportPresent = false;
-        vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, i, mSurface, &bSupportPresent);
+        vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, index, mSurface, &bSupportPresent);
         if (bSupportPresent)
         {
-            indices.PresentFamily = i;
+            indices.PresentFamily = index;
         }
     }
 

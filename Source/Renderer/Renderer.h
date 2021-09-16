@@ -41,6 +41,7 @@ private:
     bool PickPhysicalDevice();
     bool CreateLogicalDevice();
     bool CreateSwapChain();
+    bool CreateGraphicsPipeline();
 
     bool CheckValidationLayerSupport() const;
     void GetRequiredExtensions(std::vector<const char*>& outExtensions) const;
@@ -72,8 +73,12 @@ private:
 
     std::vector<VkExtensionProperties> mVkExtensions;
     std::vector<const char*> mDeviceExtensions;
+
     std::vector<VkLayerProperties> mVkLayers;
     std::vector<const char*> mValidationLayers;
+
+    std::vector<VkImage> mSwapChainImages;
+    std::vector<VkImageView> mSwapChainImageViews;
 
     bool mbEnableValidationLayer;
 
