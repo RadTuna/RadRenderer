@@ -9,6 +9,9 @@ cmake_minimum_required(VERSION 3.8)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# export compile command for vscode
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 # set project name
 project(RadRenderer)
 
