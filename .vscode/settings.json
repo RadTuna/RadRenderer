@@ -1,4 +1,5 @@
 {
+    "cmake.buildDirectory": "${workspaceFolder}/Intermediate",
     "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
     "C_Cpp.default.compileCommands": "${workspaceFolder}/Intermediate/compile_commands.json"
 }
