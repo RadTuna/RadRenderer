@@ -43,7 +43,7 @@ conan_basic_setup(TARGETS NO_OUTPUT_DIRS)
 # set executable
 if (WIN32)
     add_executable(${PROJECT_NAME} WIN32 ${ALL_FILES})
-elseif (LINUX)
+elseif (UNIX)
     add_executable(${PROJECT_NAME} ${ALL_FILES})
 else()
     message(FATEL_ERROR "You can't build cmake from this platform")

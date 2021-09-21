@@ -5,9 +5,14 @@ Windows, Linux 지원을 목표로 하고 있습니다.
 
 ## Preparations
 Rad Renderer를 빌드하기 위해서는 다음과 같은 소프트웨어가 필요합니다.  
-CMake 3.8 or later: https://cmake.org/download  
-Vulkan SDK: https://vulkan.lunarg.com/sdk/home  
-Conan package manager: https://conan.io  
+- CMake 3.8 or later
+    - Windows: 인스톨러 사용 - https://cmake.org/download
+    - Linux(Ubuntu): 패키지 매니저 사용 - '''sudo apt install cmake'''
+- Vulkan SDK
+    - Windows: 인스톨러 사용 - https://vulkan.lunarg.com/sdk/home  
+    - Linux(Ubuntu): 패키지 매니저 사용 - '''sudo apt install vulkan-sdk'''
+- Conan package manager
+    - Windows and Linux(Ubuntu): 인스톨러 사용 - https://conan.io  
 
 ## Installation
 위의 소프트웨어를 준비했다면 다음의 절차를 따라서 빌드하면 됩니다.  
