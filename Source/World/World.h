@@ -14,5 +14,6 @@ public:
     bool Initialize() override;
     void Loop() override;
     void Deinitialize() override;
+    bool IsInitialized() const override { return true; }
 
 };

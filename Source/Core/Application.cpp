@@ -48,29 +48,37 @@ bool Application::Run()
 {
     RAD_LOG(ELogType::Core, ELogClass::Log, "Start application.");
 
+    bool bSuccessInit = true;
     for (IModule* myModule : mModules)
     {
         if (myModule->Initialize() == false)
         {
-            return false;
+            bSuccessInit = false;
+            break;
         }
     }
 
-    while (glfwWindowShouldClose(mWindow) == false)
+    if (bSuccessInit)
     {
-        Loop();
+        while (glfwWindowShouldClose(mWindow) == false)
+        {
+            Loop();
 
-        glfwPollEvents();
+            glfwPollEvents();
+        }
     }
 
     for (IModule* myModule : mModules)
     {
-        myModule->Deinitialize();
+        if (myModule->IsInitialized())
+        {
+            myModule->Deinitialize();
+        }
     }
 
     RAD_LOG(ELogType::Core, ELogClass::Log, "End application.");
 
-    return true;
+    return bSuccessInit;
 }
 
 void Application::Loop()

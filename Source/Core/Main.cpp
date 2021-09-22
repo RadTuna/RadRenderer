@@ -16,12 +16,14 @@ int CROSS_MAIN(int argc, char* argv[])
     Application* app = Application::GetApplicationOrNull();
     if (app == nullptr)
     {
+        PRINT_RAD_LOGGER();
         return EXIT_FAILURE;
     }
 
     const bool bResult = app->Run();
     if (!bResult)
     {
+        PRINT_RAD_LOGGER();
         return EXIT_FAILURE;
     }
 
