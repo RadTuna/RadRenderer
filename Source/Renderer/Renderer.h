@@ -33,7 +33,6 @@ public:
     bool Initialize() override;
     void Loop() override;
     void Deinitialize() override;
-    bool IsInitialized() const override { return mbIsInitialized; }
 
 private:
     bool CreateInstance();
@@ -44,6 +43,10 @@ private:
     bool CreateSwapChain();
     bool CreateRenderPass();
     bool CreateGraphicsPipeline();
+    bool CreateFrameBuffers();
+    bool CreateCommandPool();
+    bool CreateCommandBuffers();
+    bool CreateSyncObjects();
 
     bool CheckValidationLayerSupport() const;
     void GetRequiredExtensions(std::vector<const char*>* outExtensions) const;
@@ -67,6 +70,8 @@ private:
     static bool TryReadShaderFile(std::vector<uint8_t>* outBinary, const std::string& filePath);
 
 private:
+    static const uint32_t MAX_FRAME_IN_FLIGHT;
+
     VkInstance mInstance;
     VkDebugUtilsMessengerEXT mDebugMessenger;
     VkPhysicalDevice mPhysicalDevice;
@@ -78,6 +83,13 @@ private:
     VkRenderPass mRenderPass;
     VkPipelineLayout mPipelineLayout;
     VkPipeline mGraphicPipeline;
+    VkCommandPool mCommandPool;
+
+    std::vector<VkSemaphore> mImageAvailableSemaphores;
+    std::vector<VkSemaphore> mRenderFinishedSemaphores;
+    std::vector<VkFence> mInFlightFence;
+    std::vector<VkFence> mImageInFlightFence;
+    uint32_t mCurrentFrame;
 
     std::vector<VkExtensionProperties> mVkExtensions;
     std::vector<const char*> mDeviceExtensions;
@@ -90,7 +102,10 @@ private:
     VkExtent2D mSwapChainExtent;
     VkFormat mSwapChainImageFormat;
 
+    std::vector<VkFramebuffer> mSwapChainFrameBuffers;
+
+    std::vector<VkCommandBuffer> mCommandBuffers;
+
     bool mbEnableValidationLayer;
-    bool mbIsInitialized;
 
 };

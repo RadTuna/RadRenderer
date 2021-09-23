@@ -70,10 +70,7 @@ bool Application::Run()
 
     for (IModule* myModule : mModules)
     {
-        if (myModule->IsInitialized())
-        {
-            myModule->Deinitialize();
-        }
+        myModule->Deinitialize();
     }
 
     RAD_LOG(ELogType::Core, ELogClass::Log, "End application.");

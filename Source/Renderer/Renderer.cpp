@@ -57,6 +57,8 @@ bool IsValidQueueFamilyIndices(const QueueFamilyIndices& indices)
     return bIsValidGraphicQueue && bIsValidPresentQueue;
 }
 
+const uint32_t Renderer::MAX_FRAME_IN_FLIGHT = 3;
+
 Renderer::Renderer()
     : mInstance(VK_NULL_HANDLE)
     , mDebugMessenger(VK_NULL_HANDLE)
@@ -69,10 +71,11 @@ Renderer::Renderer()
     , mRenderPass(VK_NULL_HANDLE)
     , mPipelineLayout(VK_NULL_HANDLE)
     , mGraphicPipeline(VK_NULL_HANDLE)
+    , mCommandPool(VK_NULL_HANDLE)
+    , mCurrentFrame(0)
     , mSwapChainExtent{0,}
     , mSwapChainImageFormat(VK_FORMAT_UNDEFINED)
     , mbEnableValidationLayer(true)
-    , mbIsInitialized(false)
 {
     // required extension
     mDeviceExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
@@ -140,7 +143,29 @@ bool Renderer::Initialize()
         return false;
     }
 
-    mbIsInitialized = bResult;
+    bResult = CreateFrameBuffers();
+    if (!bResult)
+    {
+        return false;
+    }
+
+    bResult = CreateCommandPool();
+    if (!bResult)
+    {
+        return false;
+    }
+
+    bResult = CreateCommandBuffers();
+    if (!bResult)
+    {
+        return false;
+    }
+
+    bResult = CreateSyncObjects();
+    if (!bResult)
+    {
+        return false;
+    }
 
     RAD_LOG(ELogType::Renderer, ELogClass::Log, "Complete renderer module initialization.");
     return true;
@@ -148,18 +173,78 @@ bool Renderer::Initialize()
 
 void Renderer::Loop()
 {
+    vkWaitForFences(mDevice, 1, &mInFlightFence[mCurrentFrame], VK_TRUE, UINT64_MAX);
+
+    uint32_t imageIndex;
+    vkAcquireNextImageKHR(mDevice, mSwapChain, UINT64_MAX, mImageAvailableSemaphores[mCurrentFrame], VK_NULL_HANDLE, &imageIndex);
+
+    if (mImageInFlightFence[imageIndex] != VK_NULL_HANDLE)
+    {
+        vkWaitForFences(mDevice, 1, &mImageInFlightFence[imageIndex], VK_TRUE, UINT64_MAX);
+    }
+
+    mImageInFlightFence[imageIndex] = mInFlightFence[mCurrentFrame];
+    vkResetFences(mDevice, 1, &mInFlightFence[mCurrentFrame]);
+
+    VkSubmitInfo submitInfo = {};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+
+    VkSemaphore waitSemaphores[] = { mImageAvailableSemaphores[mCurrentFrame] };
+    VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+    submitInfo.waitSemaphoreCount = static_cast<uint32_t>(ArraySize(waitSemaphores));
+    submitInfo.pWaitSemaphores = waitSemaphores;
+    submitInfo.pWaitDstStageMask = waitStages;
+
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &mCommandBuffers[imageIndex];
+
+    VkSemaphore signalSemaphores[] = { mRenderFinishedSemaphores[mCurrentFrame] };
+    submitInfo.signalSemaphoreCount = static_cast<uint32_t>(ArraySize(signalSemaphores));
+    submitInfo.pSignalSemaphores = signalSemaphores;
+
+    const VkResult result = vkQueueSubmit(mGraphicsQueue, 1, &submitInfo, mInFlightFence[mCurrentFrame]);
+    if (result != VK_SUCCESS)
+    {
+        assert(false);
+        RAD_LOG(ELogType::Renderer, ELogClass::Warning, "Failed to submit draw command buffer.");
+        return;
+    }
+
+    VkPresentInfoKHR presentInfo = {};
+    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    presentInfo.waitSemaphoreCount = static_cast<uint32_t>(ArraySize(waitSemaphores));
+    presentInfo.pWaitSemaphores = signalSemaphores;
+
+    VkSwapchainKHR swapChains[] = { mSwapChain };
+    presentInfo.swapchainCount = static_cast<uint32_t>(ArraySize(swapChains));
+    presentInfo.pSwapchains = swapChains;
+    presentInfo.pImageIndices = &imageIndex;
+    presentInfo.pResults = nullptr;
+
+    vkQueuePresentKHR(mPresentQueue, &presentInfo);
+
+    mCurrentFrame = (mCurrentFrame + 1) % MAX_FRAME_IN_FLIGHT;
 }
 
 void Renderer::Deinitialize()
 {
     RAD_LOG(ELogType::Renderer, ELogClass::Log, "Start renderer module deinitialization.");
 
-#if !defined NDEBUG
-    if (mbEnableValidationLayer)
+    vkDeviceWaitIdle(mDevice);
+
+    for (uint32_t i = 0; i < MAX_FRAME_IN_FLIGHT; ++i)
     {
-        DestroyDebugUtilsMessengerEXT(mInstance, mDebugMessenger, nullptr);
+        vkDestroyFence(mDevice, mInFlightFence[i], nullptr);
+        vkDestroySemaphore(mDevice, mRenderFinishedSemaphores[i], nullptr);
+        vkDestroySemaphore(mDevice, mImageAvailableSemaphores[i], nullptr);
     }
-#endif
+
+    vkDestroyCommandPool(mDevice, mCommandPool, nullptr);
+
+    for (VkFramebuffer frameBuffer : mSwapChainFrameBuffers)
+    {
+        vkDestroyFramebuffer(mDevice, frameBuffer, nullptr);
+    }
 
     vkDestroyPipeline(mDevice, mGraphicPipeline, nullptr);
     vkDestroyPipelineLayout(mDevice, mPipelineLayout, nullptr);
@@ -173,9 +258,13 @@ void Renderer::Deinitialize()
     vkDestroySwapchainKHR(mDevice, mSwapChain, nullptr);
     vkDestroyDevice(mDevice, nullptr);
     vkDestroySurfaceKHR(mInstance, mSurface, nullptr);
+#if !defined NDEBUG
+    if (mbEnableValidationLayer)
+    {
+        DestroyDebugUtilsMessengerEXT(mInstance, mDebugMessenger, nullptr);
+    }
+#endif
     vkDestroyInstance(mInstance, nullptr);
-
-    mbIsInitialized = false;
 
     RAD_LOG(ELogType::Renderer, ELogClass::Log, "Complete renderer module deinitialization.");
 }
@@ -495,12 +584,22 @@ bool Renderer::CreateRenderPass()
     subPass.colorAttachmentCount = 1;
     subPass.pColorAttachments = &colorAttachmentRef;
 
+    VkSubpassDependency dependency = {};
+    dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+    dependency.dstSubpass = VK_SUBPASS_CONTENTS_INLINE;
+    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependency.srcAccessMask = VK_ACCESS_NONE_KHR;
+    dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
     VkRenderPassCreateInfo renderPassCreateInfo = {};
     renderPassCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
     renderPassCreateInfo.attachmentCount = 1;
     renderPassCreateInfo.pAttachments = &colorAttachment;
     renderPassCreateInfo.subpassCount = 1;
     renderPassCreateInfo.pSubpasses = &subPass;
+    renderPassCreateInfo.dependencyCount = 1;
+    renderPassCreateInfo.pDependencies = &dependency;
 
     VkResult result = vkCreateRenderPass(mDevice, &renderPassCreateInfo, nullptr, &mRenderPass);
     if (result != VK_SUCCESS)
@@ -709,6 +808,159 @@ bool Renderer::CreateGraphicsPipeline()
 
     vkDestroyShaderModule(mDevice, vertShaderModule, nullptr);
     vkDestroyShaderModule(mDevice, fragShaderModule, nullptr);
+
+    return true;
+}
+
+bool Renderer::CreateFrameBuffers()
+{
+    mSwapChainFrameBuffers.resize(mSwapChainImageViews.size());
+
+    for (size_t i = 0; i < mSwapChainImageViews.size(); ++i)
+    {
+        VkImageView attachments[] = {
+            mSwapChainImageViews[i]
+        };
+
+        VkFramebufferCreateInfo frameBufferCreateInfo = {};
+        frameBufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        frameBufferCreateInfo.renderPass = mRenderPass;
+        frameBufferCreateInfo.attachmentCount = static_cast<uint32_t>(ArraySize(attachments));
+        frameBufferCreateInfo.pAttachments = attachments;
+        frameBufferCreateInfo.width = mSwapChainExtent.width;
+        frameBufferCreateInfo.height = mSwapChainExtent.height;
+        frameBufferCreateInfo.layers = 1;
+
+        const VkResult result = vkCreateFramebuffer(mDevice, &frameBufferCreateInfo, nullptr, &mSwapChainFrameBuffers[i]);
+        if (result != VK_SUCCESS)
+        {
+            RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to create frame buffer.");
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool Renderer::CreateCommandPool()
+{
+    QueueFamilyIndices queueFamilyIndices = FindQueueFamily(mPhysicalDevice);
+
+    VkCommandPoolCreateInfo commandPoolCreateInfo = {};
+    commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    commandPoolCreateInfo.queueFamilyIndex = queueFamilyIndices.GraphicFamily.value();
+    commandPoolCreateInfo.flags = 0;
+
+    const VkResult result = vkCreateCommandPool(mDevice, &commandPoolCreateInfo, nullptr, &mCommandPool);
+    if (result != VK_SUCCESS)
+    {
+        RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to create command pool.");
+        return false;
+    }
+
+    return true;
+}
+
+bool Renderer::CreateCommandBuffers()
+{
+    mCommandBuffers.resize(mSwapChainFrameBuffers.size());
+
+    VkCommandBufferAllocateInfo allocInfo = {};
+    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.commandPool = mCommandPool;
+    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocInfo.commandBufferCount = static_cast<uint32_t>(mCommandBuffers.size());
+
+    const VkResult result = vkAllocateCommandBuffers(mDevice, &allocInfo, mCommandBuffers.data());
+    if (result != VK_SUCCESS)
+    {
+        RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to allocate command buffers.");
+        return false;
+    }
+
+    for (size_t i = 0; i < mCommandBuffers.size(); ++i)
+    {
+        VkCommandBufferBeginInfo commandBufferBeginInfo = {};
+        commandBufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        commandBufferBeginInfo.flags = 0;
+        commandBufferBeginInfo.pInheritanceInfo = nullptr;
+
+        VkResult passResult = vkBeginCommandBuffer(mCommandBuffers[i], &commandBufferBeginInfo);
+        if (passResult != VK_SUCCESS)
+        {
+            RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to begin recording command buffer.");
+            return false;
+        }
+
+        assert(mCommandBuffers.size() == mSwapChainFrameBuffers.size());
+        VkRenderPassBeginInfo renderPassBeginInfo = {};
+        renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        renderPassBeginInfo.renderPass = mRenderPass;
+        renderPassBeginInfo.framebuffer = mSwapChainFrameBuffers[i];
+        renderPassBeginInfo.renderArea.offset = { 0, 0 };
+        renderPassBeginInfo.renderArea.extent = mSwapChainExtent;
+
+        VkClearValue clearColor = {};
+        clearColor.color = { 0.f, 0.f, 0.f, 1.f };
+
+        renderPassBeginInfo.clearValueCount = 1;
+        renderPassBeginInfo.pClearValues = &clearColor;
+
+        vkCmdBeginRenderPass(mCommandBuffers[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+        vkCmdBindPipeline(mCommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, mGraphicPipeline);
+        vkCmdDraw(mCommandBuffers[i], 3, 1, 0, 0);
+
+        vkCmdEndRenderPass(mCommandBuffers[i]);
+
+        passResult = vkEndCommandBuffer(mCommandBuffers[i]);
+        if (passResult != VK_SUCCESS)
+        {
+            RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to end recording command buffer.");
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool Renderer::CreateSyncObjects()
+{
+    mImageAvailableSemaphores.resize(MAX_FRAME_IN_FLIGHT);
+    mRenderFinishedSemaphores.resize(MAX_FRAME_IN_FLIGHT);
+    mInFlightFence.resize(MAX_FRAME_IN_FLIGHT);
+    mImageInFlightFence.resize(mSwapChainImages.size(), VK_NULL_HANDLE);
+
+    VkSemaphoreCreateInfo semaphoreCreateInfo = {};
+    semaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+    VkFenceCreateInfo fenceCreateInfo = {};
+    fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    fenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+    for (uint32_t i = 0; i < MAX_FRAME_IN_FLIGHT; ++i)
+    {
+        VkResult result = vkCreateSemaphore(mDevice, &semaphoreCreateInfo, nullptr, &mImageAvailableSemaphores[i]);
+        if (result != VK_SUCCESS)
+        {
+            RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to create image available semaphore.");
+            return false;
+        }
+
+        result = vkCreateSemaphore(mDevice, &semaphoreCreateInfo, nullptr, &mRenderFinishedSemaphores[i]);
+        if (result != VK_SUCCESS)
+        {
+            RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to create render finished semaphore.");
+            return false;
+        }
+
+        result = vkCreateFence(mDevice, &fenceCreateInfo, nullptr, &mInFlightFence[i]);
+        if (result != VK_SUCCESS)
+        {
+            RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to create in-flight fence.");
+            return false;
+        }
+    }
 
     return true;
 }
