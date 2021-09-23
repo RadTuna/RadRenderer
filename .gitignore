@@ -2,8 +2,12 @@
 # Rad Renderer git ignore #
 ###########################
 
+# Folder
 /.vs
 /Binaries
 /Intermediate
 /Conan
 /Logs
+
+#file
+*.spv
