@@ -6,6 +6,7 @@
 #include <cassert>
 
 // Internal Include
+#include "Core/Module.h"
 #include "Editor/Editor.h"
 #include "Renderer/Renderer.h"
 #include "World/World.h"
@@ -15,9 +16,9 @@
 std::unique_ptr<Application> Application::ApplicationInstance = nullptr;
 
 Application::Application(uint32_t width, uint32_t height, const std::string& title)
-    : mEditor(std::make_unique<Editor>())
-    , mRenderer(std::make_unique<Renderer>())
-    , mWorld(std::make_unique<World>())
+    : mEditor(std::make_unique<Editor>(this))
+    , mRenderer(std::make_unique<Renderer>(this))
+    , mWorld(std::make_unique<World>(this))
     , mWindow(nullptr)
     , mWidth(width)
     , mHeight(height)
@@ -49,7 +50,7 @@ bool Application::Run()
     RAD_LOG(ELogType::Core, ELogClass::Log, "Start application.");
 
     bool bSuccessInit = true;
-    for (IModule* myModule : mModules)
+    for (Module* myModule : mModules)
     {
         if (myModule->Initialize() == false)
         {
@@ -68,7 +69,7 @@ bool Application::Run()
         }
     }
 
-    for (IModule* myModule : mModules)
+    for (Module* myModule : mModules)
     {
         myModule->Deinitialize();
     }
@@ -80,7 +81,7 @@ bool Application::Run()
 
 void Application::Loop()
 {
-    for (IModule* myModule : mModules)
+    for (Module* myModule : mModules)
     {
         myModule->Loop();
     }
@@ -92,7 +93,7 @@ void Application::InitializeWindow()
     // pre setting for create window
     glfwInit();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+    //glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
     // create glfw window
     mWindow = glfwCreateWindow(
@@ -102,6 +103,10 @@ void Application::InitializeWindow()
         nullptr, 
         nullptr);
 
+    // bind frame buffer resize callback
+    glfwSetWindowUserPointer(mWindow, this);
+    glfwSetFramebufferSizeCallback(mWindow, &OnResizeFrameBuffer);
+
     RAD_LOG(ELogType::Core, ELogClass::Log, "Complete window creation.");
 }
 
@@ -109,4 +114,14 @@ void Application::DeinitializeWindow()
 {
     glfwDestroyWindow(mWindow);
     glfwTerminate();
+}
+
+void Application::OnResizeFrameBuffer(GLFWwindow* window, int width, int height)
+{
+    Application* self = reinterpret_cast<Application*>(glfwGetWindowUserPointer(window));
+    assert(self != nullptr);
+
+    self->mRenderer->FrameBufferResized();
+    const bool bStopRender = width == 0 || height == 0;
+    self->mRenderer->SetRender(!bStopRender);
 }

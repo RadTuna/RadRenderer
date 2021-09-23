@@ -7,7 +7,7 @@
 #include <vulkan/vulkan.h>
 
 // Internal Include
-#include "Core/IModule.h"
+#include "Core/Module.h"
 
 
 struct QueueFamilyIndices
@@ -23,16 +23,23 @@ struct SwapChainSupportDetails
     std::vector<VkPresentModeKHR> PresentModes;
 };
 
-class Renderer final : public IModule 
+class Renderer final : public Module 
 {
 public:
-    Renderer();
-    ~Renderer();
+    Renderer(class Application* inApp);
+    ~Renderer() override;
 
     // IModule interfaces...
     bool Initialize() override;
     void Loop() override;
     void Deinitialize() override;
+
+    bool CreateDependSwapChainObjects(bool bIsRecreate);
+    void DestroyDependSwapChainObjects();
+
+    void FrameBufferResized() { mbFrameBufferResized = true; }
+    void SetRender(bool bCanRender) { mbCanRender = bCanRender; }
+    bool CanRender() const { return mbCanRender; }
 
 private:
     bool CreateInstance();
@@ -107,5 +114,7 @@ private:
     std::vector<VkCommandBuffer> mCommandBuffers;
 
     bool mbEnableValidationLayer;
+    bool mbFrameBufferResized;
+    bool mbCanRender;
 
 };

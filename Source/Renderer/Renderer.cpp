@@ -59,8 +59,9 @@ bool IsValidQueueFamilyIndices(const QueueFamilyIndices& indices)
 
 const uint32_t Renderer::MAX_FRAME_IN_FLIGHT = 3;
 
-Renderer::Renderer()
-    : mInstance(VK_NULL_HANDLE)
+Renderer::Renderer(class Application* inApp)
+    : Module(inApp)
+    , mInstance(VK_NULL_HANDLE)
     , mDebugMessenger(VK_NULL_HANDLE)
     , mPhysicalDevice(VK_NULL_HANDLE)
     , mDevice(VK_NULL_HANDLE)
@@ -76,6 +77,8 @@ Renderer::Renderer()
     , mSwapChainExtent{0,}
     , mSwapChainImageFormat(VK_FORMAT_UNDEFINED)
     , mbEnableValidationLayer(true)
+    , mbFrameBufferResized(false)
+    , mbCanRender(true)
 {
     // required extension
     mDeviceExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
@@ -125,7 +128,145 @@ bool Renderer::Initialize()
         return false;
     }
 
-    bResult = CreateSwapChain();
+    bResult = CreateDependSwapChainObjects(false);
+    if (!bResult)
+    {
+        return false;
+    }
+
+    bResult = CreateSyncObjects();
+    if (!bResult)
+    {
+        return false;
+    }
+
+    RAD_LOG(ELogType::Renderer, ELogClass::Log, "Complete renderer module initialization.");
+    return true;
+}
+
+void Renderer::Loop()
+{
+    if (!mbCanRender)
+    {
+        return;
+    }
+
+    VK_ASSERT_RETURN(vkWaitForFences(mDevice, 1, &mInFlightFence[mCurrentFrame], VK_TRUE, UINT64_MAX));
+
+    uint32_t imageIndex;
+    VkResult result = vkAcquireNextImageKHR(mDevice, mSwapChain, UINT64_MAX, mImageAvailableSemaphores[mCurrentFrame], VK_NULL_HANDLE, &imageIndex);
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
+    {
+        CreateDependSwapChainObjects(true);
+        return;
+    }
+
+    if (mImageInFlightFence[imageIndex] != VK_NULL_HANDLE)
+    {
+        vkWaitForFences(mDevice, 1, &mImageInFlightFence[imageIndex], VK_TRUE, UINT64_MAX);
+    }
+
+    mImageInFlightFence[imageIndex] = mInFlightFence[mCurrentFrame];
+    VK_ASSERT_RETURN(vkResetFences(mDevice, 1, &mInFlightFence[mCurrentFrame]));
+
+    VkSubmitInfo submitInfo = {};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+
+    VkSemaphore waitSemaphores[] = { mImageAvailableSemaphores[mCurrentFrame] };
+    VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+    submitInfo.waitSemaphoreCount = static_cast<uint32_t>(ArraySize(waitSemaphores));
+    submitInfo.pWaitSemaphores = waitSemaphores;
+    submitInfo.pWaitDstStageMask = waitStages;
+
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &mCommandBuffers[imageIndex];
+
+    VkSemaphore signalSemaphores[] = { mRenderFinishedSemaphores[mCurrentFrame] };
+    submitInfo.signalSemaphoreCount = static_cast<uint32_t>(ArraySize(signalSemaphores));
+    submitInfo.pSignalSemaphores = signalSemaphores;
+
+    result = vkQueueSubmit(mGraphicsQueue, 1, &submitInfo, mInFlightFence[mCurrentFrame]);
+    if (result != VK_SUCCESS)
+    {
+        RAD_LOG(ELogType::Renderer, ELogClass::Warning, "Failed to submit draw command buffer.");
+        return;
+    }
+
+    VkPresentInfoKHR presentInfo = {};
+    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    presentInfo.waitSemaphoreCount = static_cast<uint32_t>(ArraySize(waitSemaphores));
+    presentInfo.pWaitSemaphores = signalSemaphores;
+
+    VkSwapchainKHR swapChains[] = { mSwapChain };
+    presentInfo.swapchainCount = static_cast<uint32_t>(ArraySize(swapChains));
+    presentInfo.pSwapchains = swapChains;
+    presentInfo.pImageIndices = &imageIndex;
+    presentInfo.pResults = nullptr;
+
+    result = vkQueuePresentKHR(mPresentQueue, &presentInfo);
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
+    {
+        CreateDependSwapChainObjects(true);
+    }
+
+    if (mbFrameBufferResized)
+    {
+        CreateDependSwapChainObjects(true);
+    }
+
+    mCurrentFrame = (mCurrentFrame + 1) % MAX_FRAME_IN_FLIGHT;
+}
+
+void Renderer::Deinitialize()
+{
+    RAD_LOG(ELogType::Renderer, ELogClass::Log, "Start renderer module deinitialization.");
+
+    vkDeviceWaitIdle(mDevice);
+
+    for (uint32_t i = 0; i < MAX_FRAME_IN_FLIGHT; ++i)
+    {
+        vkDestroyFence(mDevice, mInFlightFence[i], nullptr);
+        vkDestroySemaphore(mDevice, mRenderFinishedSemaphores[i], nullptr);
+        vkDestroySemaphore(mDevice, mImageAvailableSemaphores[i], nullptr);
+    }
+
+    vkDestroyCommandPool(mDevice, mCommandPool, nullptr);
+    DestroyDependSwapChainObjects();
+
+    vkDestroyDevice(mDevice, nullptr);
+    vkDestroySurfaceKHR(mInstance, mSurface, nullptr);
+#if !defined NDEBUG
+    if (mbEnableValidationLayer)
+    {
+        DestroyDebugUtilsMessengerEXT(mInstance, mDebugMessenger, nullptr);
+    }
+#endif
+    vkDestroyInstance(mInstance, nullptr);
+
+    RAD_LOG(ELogType::Renderer, ELogClass::Log, "Complete renderer module deinitialization.");
+}
+
+bool Renderer::CreateDependSwapChainObjects(bool bIsRecreate)
+{
+    if (bIsRecreate)
+    {
+        int width = 0;
+        int height = 0;
+        glfwGetFramebufferSize(mApp->GetWindowObject(), &width, &height);
+        if (width == 0 || height == 0)
+        {
+            return false;
+        }
+
+        vkDeviceWaitIdle(mDevice);
+
+        vkFreeCommandBuffers(mDevice, mCommandPool, static_cast<uint32_t>(mCommandBuffers.size()), mCommandBuffers.data());
+        DestroyDependSwapChainObjects();
+
+        RAD_LOG(ELogType::Renderer, ELogClass::Log, "Recreate to objects depend on swap chain.");
+    }
+
+    bool bResult = CreateSwapChain();
     if (!bResult)
     {
         return false;
@@ -149,10 +290,13 @@ bool Renderer::Initialize()
         return false;
     }
 
-    bResult = CreateCommandPool();
-    if (!bResult)
+    if (!bIsRecreate)
     {
-        return false;
+        bResult = CreateCommandPool();
+        if (!bResult)
+        {
+            return false;
+        }
     }
 
     bResult = CreateCommandBuffers();
@@ -161,86 +305,11 @@ bool Renderer::Initialize()
         return false;
     }
 
-    bResult = CreateSyncObjects();
-    if (!bResult)
-    {
-        return false;
-    }
-
-    RAD_LOG(ELogType::Renderer, ELogClass::Log, "Complete renderer module initialization.");
     return true;
 }
 
-void Renderer::Loop()
+void Renderer::DestroyDependSwapChainObjects()
 {
-    vkWaitForFences(mDevice, 1, &mInFlightFence[mCurrentFrame], VK_TRUE, UINT64_MAX);
-
-    uint32_t imageIndex;
-    vkAcquireNextImageKHR(mDevice, mSwapChain, UINT64_MAX, mImageAvailableSemaphores[mCurrentFrame], VK_NULL_HANDLE, &imageIndex);
-
-    if (mImageInFlightFence[imageIndex] != VK_NULL_HANDLE)
-    {
-        vkWaitForFences(mDevice, 1, &mImageInFlightFence[imageIndex], VK_TRUE, UINT64_MAX);
-    }
-
-    mImageInFlightFence[imageIndex] = mInFlightFence[mCurrentFrame];
-    vkResetFences(mDevice, 1, &mInFlightFence[mCurrentFrame]);
-
-    VkSubmitInfo submitInfo = {};
-    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-
-    VkSemaphore waitSemaphores[] = { mImageAvailableSemaphores[mCurrentFrame] };
-    VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-    submitInfo.waitSemaphoreCount = static_cast<uint32_t>(ArraySize(waitSemaphores));
-    submitInfo.pWaitSemaphores = waitSemaphores;
-    submitInfo.pWaitDstStageMask = waitStages;
-
-    submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &mCommandBuffers[imageIndex];
-
-    VkSemaphore signalSemaphores[] = { mRenderFinishedSemaphores[mCurrentFrame] };
-    submitInfo.signalSemaphoreCount = static_cast<uint32_t>(ArraySize(signalSemaphores));
-    submitInfo.pSignalSemaphores = signalSemaphores;
-
-    const VkResult result = vkQueueSubmit(mGraphicsQueue, 1, &submitInfo, mInFlightFence[mCurrentFrame]);
-    if (result != VK_SUCCESS)
-    {
-        assert(false);
-        RAD_LOG(ELogType::Renderer, ELogClass::Warning, "Failed to submit draw command buffer.");
-        return;
-    }
-
-    VkPresentInfoKHR presentInfo = {};
-    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-    presentInfo.waitSemaphoreCount = static_cast<uint32_t>(ArraySize(waitSemaphores));
-    presentInfo.pWaitSemaphores = signalSemaphores;
-
-    VkSwapchainKHR swapChains[] = { mSwapChain };
-    presentInfo.swapchainCount = static_cast<uint32_t>(ArraySize(swapChains));
-    presentInfo.pSwapchains = swapChains;
-    presentInfo.pImageIndices = &imageIndex;
-    presentInfo.pResults = nullptr;
-
-    vkQueuePresentKHR(mPresentQueue, &presentInfo);
-
-    mCurrentFrame = (mCurrentFrame + 1) % MAX_FRAME_IN_FLIGHT;
-}
-
-void Renderer::Deinitialize()
-{
-    RAD_LOG(ELogType::Renderer, ELogClass::Log, "Start renderer module deinitialization.");
-
-    vkDeviceWaitIdle(mDevice);
-
-    for (uint32_t i = 0; i < MAX_FRAME_IN_FLIGHT; ++i)
-    {
-        vkDestroyFence(mDevice, mInFlightFence[i], nullptr);
-        vkDestroySemaphore(mDevice, mRenderFinishedSemaphores[i], nullptr);
-        vkDestroySemaphore(mDevice, mImageAvailableSemaphores[i], nullptr);
-    }
-
-    vkDestroyCommandPool(mDevice, mCommandPool, nullptr);
-
     for (VkFramebuffer frameBuffer : mSwapChainFrameBuffers)
     {
         vkDestroyFramebuffer(mDevice, frameBuffer, nullptr);
@@ -256,17 +325,6 @@ void Renderer::Deinitialize()
     }
 
     vkDestroySwapchainKHR(mDevice, mSwapChain, nullptr);
-    vkDestroyDevice(mDevice, nullptr);
-    vkDestroySurfaceKHR(mInstance, mSurface, nullptr);
-#if !defined NDEBUG
-    if (mbEnableValidationLayer)
-    {
-        DestroyDebugUtilsMessengerEXT(mInstance, mDebugMessenger, nullptr);
-    }
-#endif
-    vkDestroyInstance(mInstance, nullptr);
-
-    RAD_LOG(ELogType::Renderer, ELogClass::Log, "Complete renderer module deinitialization.");
 }
 
 bool Renderer::CreateInstance()
@@ -366,10 +424,7 @@ bool Renderer::CreateDebugMessenger()
 
 bool Renderer::CreateSurface()
 {
-    const Application* app = Application::GetApplicationOrNull();
-    assert(app != nullptr);
-
-    GLFWwindow* windowObject = app->GetWindowObject();
+    GLFWwindow* windowObject = mApp->GetWindowObject();
     VkResult vkResult = glfwCreateWindowSurface(mInstance, windowObject, nullptr, &mSurface);
     if (vkResult != VK_SUCCESS)
     {
@@ -1165,10 +1220,7 @@ VkExtent2D Renderer::ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabiliti
         int width = 0;
         int height = 0;
 
-        Application* app = Application::GetApplicationOrNull();
-        assert(app != nullptr);
-
-        GLFWwindow* windowObject = app->GetWindowObject();
+        GLFWwindow* windowObject = mApp->GetWindowObject();
         glfwGetFramebufferSize(windowObject, &width, &height);
 
         actualExtent.width = static_cast<uint32_t>(width);

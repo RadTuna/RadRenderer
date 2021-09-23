@@ -34,11 +34,13 @@ private:
     void InitializeWindow();
     void DeinitializeWindow();
 
+    static void OnResizeFrameBuffer(GLFWwindow* window, int width, int height);
+
 private:
     // Singleton pattern property
     static std::unique_ptr<Application> ApplicationInstance;
 
-    std::vector<class IModule*> mModules;
+    std::vector<class Module*> mModules;
 
     std::unique_ptr<class Editor> mEditor;
     std::unique_ptr<class Renderer> mRenderer;

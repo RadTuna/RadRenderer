@@ -1,14 +1,14 @@
 #pragma once
 
 // Internal Include
-#include "Core/IModule.h"
+#include "Core/Module.h"
 
 
-class Editor final : public IModule
+class Editor final : public Module
 {
 public:
-    Editor();
-    ~Editor();
+    Editor(class Application* inApp);
+    ~Editor() override = default;
 
     // IModule interfaces...
     bool Initialize() override;

@@ -1,14 +1,14 @@
 #pragma once
 
 // Internal Include
-#include "Core/IModule.h"
+#include "Core/Module.h"
 
 
-class World final : public IModule
+class World final : public Module
 {
 public:
-    World();
-    ~World();
+    World(class Application* inApp);
+    ~World() override = default;
 
     // IModule interfaces...
     bool Initialize() override;

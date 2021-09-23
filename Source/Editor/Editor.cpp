@@ -6,11 +6,8 @@
 #include "Core/Logger.h"
 
 
-Editor::Editor()
-{
-}
-
-Editor::~Editor()
+Editor::Editor(class Application* inApp)
+    : Module(inApp)
 {
 }
 

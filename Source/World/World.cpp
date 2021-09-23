@@ -6,11 +6,8 @@
 #include "Core/Logger.h"
 
 
-World::World()
-{
-}
-
-World::~World()
+World::World(class Application* inApp)
+    : Module(inApp)
 {
 }
 
