@@ -19,8 +19,15 @@ if exist %VK_COMPILER_PATH% (
     echo.
 
     cd Shader
-    for %%i in (*.vert) do %VK_COMPILER_PATH% %%i -o %%i.spv
-    for %%i in (*.frag) do %VK_COMPILER_PATH% %%i -o %%i.spv
+    for %%i in (*.vert) do (
+        %VK_COMPILER_PATH% %%i -o %%i.spv 
+        echo %%i.spv has been created.
+    )
+
+    for %%i in (*.frag) do (
+        %VK_COMPILER_PATH% %%i -o %%i.spv 
+        echo %%i.spv has been created.
+    )
 
     echo.
     echo Shader compilation is complete.
