@@ -14,6 +14,9 @@ struct QueueFamilyIndices
 {
     std::optional<uint32_t> GraphicFamily;
     std::optional<uint32_t> PresentFamily;
+
+    static bool IsValidQueueFamilyIndices(const QueueFamilyIndices& indices);
+
 };
 
 struct SwapChainSupportDetails
@@ -34,7 +37,7 @@ public:
     void Loop() override;
     void Deinitialize() override;
 
-    bool CreateDependSwapChainObjects(bool bIsRecreate);
+    bool RecreateDependSwapChainObjects();
     void DestroyDependSwapChainObjects();
 
     void FrameBufferResized() { mbFrameBufferResized = true; }
@@ -52,6 +55,7 @@ private:
     bool CreateGraphicsPipeline();
     bool CreateFrameBuffers();
     bool CreateCommandPool();
+    bool CreateVertexBuffer();
     bool CreateCommandBuffers();
     bool CreateSyncObjects();
 
@@ -68,13 +72,13 @@ private:
     VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& avaliablePresentModes) const;
     VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilites) const;
 
+    uint32_t FindPhysicalMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) const;
+
     static VKAPI_ATTR VkBool32 VKAPI_CALL OnVkDebugLog(
         VkDebugUtilsMessageSeverityFlagBitsEXT messageServerity,
         VkDebugUtilsMessageTypeFlagsEXT messageType,
         const VkDebugUtilsMessengerCallbackDataEXT* pCallBackData,
         void* pUserData);
-
-    static bool TryReadShaderFile(std::vector<uint8_t>* outBinary, const std::string& filePath);
 
 private:
     static const uint32_t MAX_FRAME_IN_FLIGHT;
@@ -91,6 +95,9 @@ private:
     VkPipelineLayout mPipelineLayout;
     VkPipeline mGraphicPipeline;
     VkCommandPool mCommandPool;
+
+    VkBuffer mVertexBuffer;
+    VkDeviceMemory mVertexBufferMemory;
 
     std::vector<VkSemaphore> mImageAvailableSemaphores;
     std::vector<VkSemaphore> mRenderFinishedSemaphores;

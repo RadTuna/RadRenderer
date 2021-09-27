@@ -9,47 +9,19 @@
 #include <cassert>
 #include <unordered_set>
 #include <algorithm>
-#include <fstream>
+#include <array>
 
 // Internal Include
 #include "Core/Application.h"
 #include "Core/Logger.h"
 #include "Core/Helper.h"
+#include "Renderer/Vertex.h"
+#include "Renderer/VkHelper.h"
 
 
 constexpr char* DEFAULT_VALIDATION_LAYER_NAME = "VK_LAYER_KHRONOS_validation";
 
-// vulkan proxy function.
-VkResult CreateDebugUtilsMessengerEXT(
-    VkInstance instance,
-    const VkDebugUtilsMessengerCreateInfoEXT* createInfo,
-    const VkAllocationCallbacks* allocator, VkDebugUtilsMessengerEXT* debugMessenger)
-{
-    static constexpr char* VK_CREATE_DEBUG_UTILS_MESSENGER_FUNC_NAME = "vkCreateDebugUtilsMessengerEXT";
-    auto func = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(instance, VK_CREATE_DEBUG_UTILS_MESSENGER_FUNC_NAME));
-    if (func != nullptr)
-    {
-        return func(instance, createInfo, allocator, debugMessenger);
-    }
-
-    return VK_ERROR_EXTENSION_NOT_PRESENT;
-}
-
-void DestroyDebugUtilsMessengerEXT(
-    VkInstance instance, 
-    VkDebugUtilsMessengerEXT debugMessenger, 
-    const VkAllocationCallbacks* allocator)
-{
-    static constexpr char* VK_DESTROY_DEBUG_UTILS_MESSENGER_FUNC_NAME = "vkDestroyDebugUtilsMessengerEXT";
-    auto func = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(instance, VK_DESTROY_DEBUG_UTILS_MESSENGER_FUNC_NAME));
-    if (func != nullptr)
-    {
-        func(instance, debugMessenger, allocator);
-    }
-}
-
-// QueueFamilyIndices helper function.
-bool IsValidQueueFamilyIndices(const QueueFamilyIndices& indices)
+bool QueueFamilyIndices::IsValidQueueFamilyIndices(const QueueFamilyIndices& indices)
 {
     const bool bIsValidGraphicQueue = indices.GraphicFamily.has_value();
     const bool bIsValidPresentQueue = indices.PresentFamily.has_value();
@@ -73,8 +45,9 @@ Renderer::Renderer(class Application* inApp)
     , mPipelineLayout(VK_NULL_HANDLE)
     , mGraphicPipeline(VK_NULL_HANDLE)
     , mCommandPool(VK_NULL_HANDLE)
+    , mVertexBuffer(VK_NULL_HANDLE)
     , mCurrentFrame(0)
-    , mSwapChainExtent{0,}
+    , mSwapChainExtent{ 0, }
     , mSwapChainImageFormat(VK_FORMAT_UNDEFINED)
     , mbEnableValidationLayer(true)
     , mbFrameBufferResized(false)
@@ -128,7 +101,43 @@ bool Renderer::Initialize()
         return false;
     }
 
-    bResult = CreateDependSwapChainObjects(false);
+    bResult = CreateSwapChain();
+    if (!bResult)
+    {
+        return false;
+    }
+
+    bResult = CreateRenderPass();
+    if (!bResult)
+    {
+        return false;
+    }
+
+    bResult = CreateGraphicsPipeline();
+    if (!bResult)
+    {
+        return false;
+    }
+
+    bResult = CreateFrameBuffers();
+    if (!bResult)
+    {
+        return false;
+    }
+
+    bResult = CreateCommandPool();
+    if (!bResult)
+    {
+        return false;
+    }
+
+    bResult = CreateVertexBuffer();
+    if (!bResult)
+    {
+        return false;
+    }
+
+    bResult = CreateCommandBuffers();
     if (!bResult)
     {
         return false;
@@ -157,7 +166,7 @@ void Renderer::Loop()
     VkResult result = vkAcquireNextImageKHR(mDevice, mSwapChain, UINT64_MAX, mImageAvailableSemaphores[mCurrentFrame], VK_NULL_HANDLE, &imageIndex);
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
     {
-        CreateDependSwapChainObjects(true);
+        RecreateDependSwapChainObjects();
         return;
     }
 
@@ -206,12 +215,12 @@ void Renderer::Loop()
     result = vkQueuePresentKHR(mPresentQueue, &presentInfo);
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
     {
-        CreateDependSwapChainObjects(true);
+        RecreateDependSwapChainObjects();
     }
 
     if (mbFrameBufferResized)
     {
-        CreateDependSwapChainObjects(true);
+        RecreateDependSwapChainObjects();
     }
 
     mCurrentFrame = (mCurrentFrame + 1) % MAX_FRAME_IN_FLIGHT;
@@ -231,6 +240,10 @@ void Renderer::Deinitialize()
     }
 
     vkDestroyCommandPool(mDevice, mCommandPool, nullptr);
+
+    vkDestroyBuffer(mDevice, mVertexBuffer, nullptr);
+    vkFreeMemory(mDevice, mVertexBufferMemory, nullptr);
+
     DestroyDependSwapChainObjects();
 
     vkDestroyDevice(mDevice, nullptr);
@@ -246,25 +259,22 @@ void Renderer::Deinitialize()
     RAD_LOG(ELogType::Renderer, ELogClass::Log, "Complete renderer module deinitialization.");
 }
 
-bool Renderer::CreateDependSwapChainObjects(bool bIsRecreate)
+bool Renderer::RecreateDependSwapChainObjects()
 {
-    if (bIsRecreate)
+    int width = 0;
+    int height = 0;
+    glfwGetFramebufferSize(mApp->GetWindowObject(), &width, &height);
+    if (width == 0 || height == 0)
     {
-        int width = 0;
-        int height = 0;
-        glfwGetFramebufferSize(mApp->GetWindowObject(), &width, &height);
-        if (width == 0 || height == 0)
-        {
-            return false;
-        }
-
-        vkDeviceWaitIdle(mDevice);
-
-        vkFreeCommandBuffers(mDevice, mCommandPool, static_cast<uint32_t>(mCommandBuffers.size()), mCommandBuffers.data());
-        DestroyDependSwapChainObjects();
-
-        RAD_LOG(ELogType::Renderer, ELogClass::Log, "Recreate to objects depend on swap chain.");
+        return false;
     }
+
+    vkDeviceWaitIdle(mDevice);
+
+    vkFreeCommandBuffers(mDevice, mCommandPool, static_cast<uint32_t>(mCommandBuffers.size()), mCommandBuffers.data());
+    DestroyDependSwapChainObjects();
+
+    RAD_LOG(ELogType::Renderer, ELogClass::Log, "Recreate to objects depend on swap chain.");
 
     bool bResult = CreateSwapChain();
     if (!bResult)
@@ -288,15 +298,6 @@ bool Renderer::CreateDependSwapChainObjects(bool bIsRecreate)
     if (!bResult)
     {
         return false;
-    }
-
-    if (!bIsRecreate)
-    {
-        bResult = CreateCommandPool();
-        if (!bResult)
-        {
-            return false;
-        }
     }
 
     bResult = CreateCommandBuffers();
@@ -401,7 +402,7 @@ bool Renderer::CreateInstance()
         return false;
     }
 #endif
-    
+
     return true;
 }
 
@@ -468,7 +469,7 @@ bool Renderer::PickPhysicalDevice()
 bool Renderer::CreateLogicalDevice()
 {
     QueueFamilyIndices indices = FindQueueFamily(mPhysicalDevice);
-    if (IsValidQueueFamilyIndices(indices) == false)
+    if (QueueFamilyIndices::IsValidQueueFamilyIndices(indices) == false)
     {
         return false;
     }
@@ -524,7 +525,7 @@ bool Renderer::CreateLogicalDevice()
     vkGetDeviceQueue(mDevice, indices.PresentFamily.value(), 0, &mPresentQueue);
 
     return true;
-}
+    }
 
 bool Renderer::CreateSwapChain()
 {
@@ -551,7 +552,7 @@ bool Renderer::CreateSwapChain()
     swapChainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
     QueueFamilyIndices indices = FindQueueFamily(mPhysicalDevice);
-    assert(IsValidQueueFamilyIndices(indices) == true);
+    assert(QueueFamilyIndices::IsValidQueueFamilyIndices(indices) == true);
     uint32_t queueFamilyIndices[2] = { indices.GraphicFamily.value(), indices.PresentFamily.value() };
 
     if (indices.GraphicFamily != indices.PresentFamily)
@@ -717,12 +718,15 @@ bool Renderer::CreateGraphicsPipeline()
     // End shader stage
 
     // Begin vertex input state
+    const VkVertexInputBindingDescription bindingDesc = Vertex::GetVkBindingDescription();
+    const std::array<VkVertexInputAttributeDescription, 2> attributeDesc = Vertex::GetVkAttributeDescriptions();
+
     VkPipelineVertexInputStateCreateInfo vertexInputCreateInfo = {};
     vertexInputCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vertexInputCreateInfo.vertexBindingDescriptionCount = 0;
-    vertexInputCreateInfo.pVertexBindingDescriptions = nullptr;
-    vertexInputCreateInfo.vertexAttributeDescriptionCount = 0;
-    vertexInputCreateInfo.pVertexAttributeDescriptions = nullptr;
+    vertexInputCreateInfo.vertexBindingDescriptionCount = 1;
+    vertexInputCreateInfo.pVertexBindingDescriptions = &bindingDesc;
+    vertexInputCreateInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDesc.size());
+    vertexInputCreateInfo.pVertexAttributeDescriptions = attributeDesc.data();
     // End verte input state
 
     // Begin input assembly state
@@ -916,6 +920,45 @@ bool Renderer::CreateCommandPool()
     return true;
 }
 
+bool Renderer::CreateVertexBuffer()
+{
+    VkBufferCreateInfo bufferCreateInfo = {};
+    bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferCreateInfo.size = sizeof(Vertex) * Vertex::Vertices.size();
+    bufferCreateInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+    bufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    VkResult result = vkCreateBuffer(mDevice, &bufferCreateInfo, nullptr, &mVertexBuffer);
+    if (result != VK_SUCCESS)
+    {
+        return false;
+    }
+
+    VkMemoryRequirements memRequirements;
+    vkGetBufferMemoryRequirements(mDevice, mVertexBuffer, &memRequirements);
+
+    VkMemoryAllocateInfo allocInfo = {};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = memRequirements.size;
+    const VkMemoryPropertyFlags memFlag = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    allocInfo.memoryTypeIndex = FindPhysicalMemoryType(memRequirements.memoryTypeBits, memFlag);
+
+    result = vkAllocateMemory(mDevice, &allocInfo, nullptr, &mVertexBufferMemory);
+    if (result != VK_SUCCESS)
+    {
+        return false;
+    }
+
+    vkBindBufferMemory(mDevice, mVertexBuffer, mVertexBufferMemory, 0);
+
+    void* data;
+    vkMapMemory(mDevice, mVertexBufferMemory, 0, VK_WHOLE_SIZE, 0, &data);
+    memcpy(data, Vertex::Vertices.data(), static_cast<size_t>(bufferCreateInfo.size));
+    vkUnmapMemory(mDevice, mVertexBufferMemory);
+
+    return true;
+}
+
 bool Renderer::CreateCommandBuffers()
 {
     mCommandBuffers.resize(mSwapChainFrameBuffers.size());
@@ -961,12 +1004,19 @@ bool Renderer::CreateCommandBuffers()
         renderPassBeginInfo.clearValueCount = 1;
         renderPassBeginInfo.pClearValues = &clearColor;
 
+        // Begin render command
         vkCmdBeginRenderPass(mCommandBuffers[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
         vkCmdBindPipeline(mCommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, mGraphicPipeline);
-        vkCmdDraw(mCommandBuffers[i], 3, 1, 0, 0);
+
+        VkBuffer vertexBuffers[] = { mVertexBuffer };
+        VkDeviceSize offsets[] = { 0 };
+        vkCmdBindVertexBuffers(mCommandBuffers[i], 0, 1, vertexBuffers, offsets);
+
+        vkCmdDraw(mCommandBuffers[i], static_cast<uint32_t>(Vertex::Vertices.size()), 1, 0, 0);
 
         vkCmdEndRenderPass(mCommandBuffers[i]);
+        // End render command
 
         passResult = vkEndCommandBuffer(mCommandBuffers[i]);
         if (passResult != VK_SUCCESS)
@@ -1077,7 +1127,7 @@ bool Renderer::IsDeviceSuitable(VkPhysicalDevice physicalDevice) const
 
     QueueFamilyIndices indices = FindQueueFamily(physicalDevice);
 
-    const bool bIsValidQueueFamilies = IsValidQueueFamilyIndices(indices);
+    const bool bIsValidQueueFamilies = QueueFamilyIndices::IsValidQueueFamilyIndices(indices);
     const bool bExtensionSupported = CheckDeviceExtensionSupport(physicalDevice);
     bool bSwapChainSupported = false;
     if (bExtensionSupported)
@@ -1128,7 +1178,7 @@ QueueFamilyIndices Renderer::FindQueueFamily(VkPhysicalDevice physicalDevice) co
     for (size_t i = 0; i < queueFamilies.size(); ++i)
     {
         const uint32_t index = static_cast<uint32_t>(i);
-        if (IsValidQueueFamilyIndices(indices) == true)
+        if (QueueFamilyIndices::IsValidQueueFamilyIndices(indices) == true)
         {
             break;
         }
@@ -1232,6 +1282,25 @@ VkExtent2D Renderer::ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabiliti
     return actualExtent;
 }
 
+uint32_t Renderer::FindPhysicalMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) const
+{
+    VkPhysicalDeviceMemoryProperties memProperties;
+    vkGetPhysicalDeviceMemoryProperties(mPhysicalDevice, &memProperties);
+
+    for (uint32_t i = 0; i < memProperties.memoryTypeCount; ++i)
+    {
+        const bool bCorrectType = (typeFilter & (1 << i)) != 0;
+        const bool bCorrectProperty = (memProperties.memoryTypes[i].propertyFlags & properties) == properties;
+        if (bCorrectType && bCorrectProperty)
+        {
+            return i;
+        }
+    }
+
+    RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to find suitable physical device memory type.");
+    return UINT32_MAX;
+}
+
 VKAPI_ATTR VkBool32 VKAPI_CALL Renderer::OnVkDebugLog(
     VkDebugUtilsMessageSeverityFlagBitsEXT messageServerity,
     VkDebugUtilsMessageTypeFlagsEXT messageType,
@@ -1251,26 +1320,4 @@ VKAPI_ATTR VkBool32 VKAPI_CALL Renderer::OnVkDebugLog(
     RAD_LOG(ELogType::Renderer, logClass, pCallBackData->pMessage);
 
     return VK_FALSE;
-}
-
-bool Renderer::TryReadShaderFile(std::vector<uint8_t>* outBinary, const std::string& filePath)
-{
-    std::ifstream file(filePath, std::ios::ate | std::ios::binary);
-    if (file.is_open() == false)
-    {
-        RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to open file at that path");
-        return false;
-    }
-
-    const size_t fileSize = static_cast<size_t>(file.tellg());
-    const size_t padding = sizeof(uint32_t) - (fileSize % sizeof(uint32_t));
-
-    outBinary->reserve(fileSize + padding);
-    outBinary->resize(fileSize);
-
-    file.seekg(0);
-    file.read(reinterpret_cast<char*>(outBinary->data()), fileSize);
-    file.close();
-
-    return true;
 }
