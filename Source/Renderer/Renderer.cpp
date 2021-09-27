@@ -10,6 +10,7 @@
 #include <unordered_set>
 #include <algorithm>
 #include <array>
+#include <iterator>
 
 // Internal Include
 #include "Core/Application.h"
@@ -25,8 +26,22 @@ bool QueueFamilyIndices::IsValidQueueFamilyIndices(const QueueFamilyIndices& ind
 {
     const bool bIsValidGraphicQueue = indices.GraphicFamily.has_value();
     const bool bIsValidPresentQueue = indices.PresentFamily.has_value();
+    const bool bIsValidTransferQueue = indices.TransferFamily.has_value();
 
-    return bIsValidGraphicQueue && bIsValidPresentQueue;
+    return bIsValidGraphicQueue && bIsValidPresentQueue && bIsValidTransferQueue;
+}
+
+std::vector<uint32_t> QueueFamilyIndices::GetUniqueFamilies(const QueueFamilyIndices& indices)
+{
+    std::unordered_set<uint32_t> uniqueQueueFamilies;
+    uniqueQueueFamilies.insert(indices.GraphicFamily.value());
+    uniqueQueueFamilies.insert(indices.PresentFamily.value());
+    uniqueQueueFamilies.insert(indices.TransferFamily.value());
+
+    std::vector<uint32_t> outVector;
+    copy(uniqueQueueFamilies.begin(), uniqueQueueFamilies.end(), std::back_inserter(outVector));
+
+    return outVector;
 }
 
 const uint32_t Renderer::MAX_FRAME_IN_FLIGHT = 3;
@@ -39,12 +54,14 @@ Renderer::Renderer(class Application* inApp)
     , mDevice(VK_NULL_HANDLE)
     , mGraphicsQueue(VK_NULL_HANDLE)
     , mPresentQueue(VK_NULL_HANDLE)
+    , mTransferQueue(VK_NULL_HANDLE)
     , mSurface(VK_NULL_HANDLE)
     , mSwapChain(VK_NULL_HANDLE)
     , mRenderPass(VK_NULL_HANDLE)
     , mPipelineLayout(VK_NULL_HANDLE)
     , mGraphicPipeline(VK_NULL_HANDLE)
-    , mCommandPool(VK_NULL_HANDLE)
+    , mGraphicsCommandPool(VK_NULL_HANDLE)
+    , mTransferCommandPool(VK_NULL_HANDLE)
     , mVertexBuffer(VK_NULL_HANDLE)
     , mCurrentFrame(0)
     , mSwapChainExtent{ 0, }
@@ -125,7 +142,7 @@ bool Renderer::Initialize()
         return false;
     }
 
-    bResult = CreateCommandPool();
+    bResult = CreateCommandPools();
     if (!bResult)
     {
         return false;
@@ -160,7 +177,7 @@ void Renderer::Loop()
         return;
     }
 
-    VK_ASSERT_RETURN(vkWaitForFences(mDevice, 1, &mInFlightFence[mCurrentFrame], VK_TRUE, UINT64_MAX));
+    VK_ASSERT(vkWaitForFences(mDevice, 1, &mInFlightFence[mCurrentFrame], VK_TRUE, UINT64_MAX));
 
     uint32_t imageIndex;
     VkResult result = vkAcquireNextImageKHR(mDevice, mSwapChain, UINT64_MAX, mImageAvailableSemaphores[mCurrentFrame], VK_NULL_HANDLE, &imageIndex);
@@ -172,11 +189,11 @@ void Renderer::Loop()
 
     if (mImageInFlightFence[imageIndex] != VK_NULL_HANDLE)
     {
-        vkWaitForFences(mDevice, 1, &mImageInFlightFence[imageIndex], VK_TRUE, UINT64_MAX);
+        VK_ASSERT(vkWaitForFences(mDevice, 1, &mImageInFlightFence[imageIndex], VK_TRUE, UINT64_MAX));
     }
 
     mImageInFlightFence[imageIndex] = mInFlightFence[mCurrentFrame];
-    VK_ASSERT_RETURN(vkResetFences(mDevice, 1, &mInFlightFence[mCurrentFrame]));
+    VK_ASSERT(vkResetFences(mDevice, 1, &mInFlightFence[mCurrentFrame]));
 
     VkSubmitInfo submitInfo = {};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -230,7 +247,7 @@ void Renderer::Deinitialize()
 {
     RAD_LOG(ELogType::Renderer, ELogClass::Log, "Start renderer module deinitialization.");
 
-    vkDeviceWaitIdle(mDevice);
+    VK_ASSERT(vkDeviceWaitIdle(mDevice));
 
     for (uint32_t i = 0; i < MAX_FRAME_IN_FLIGHT; ++i)
     {
@@ -239,7 +256,8 @@ void Renderer::Deinitialize()
         vkDestroySemaphore(mDevice, mImageAvailableSemaphores[i], nullptr);
     }
 
-    vkDestroyCommandPool(mDevice, mCommandPool, nullptr);
+    vkDestroyCommandPool(mDevice, mTransferCommandPool, nullptr);
+    vkDestroyCommandPool(mDevice, mGraphicsCommandPool, nullptr);
 
     vkDestroyBuffer(mDevice, mVertexBuffer, nullptr);
     vkFreeMemory(mDevice, mVertexBufferMemory, nullptr);
@@ -269,9 +287,9 @@ bool Renderer::RecreateDependSwapChainObjects()
         return false;
     }
 
-    vkDeviceWaitIdle(mDevice);
+    VK_ASSERT(vkDeviceWaitIdle(mDevice));
 
-    vkFreeCommandBuffers(mDevice, mCommandPool, static_cast<uint32_t>(mCommandBuffers.size()), mCommandBuffers.data());
+    vkFreeCommandBuffers(mDevice, mGraphicsCommandPool, static_cast<uint32_t>(mCommandBuffers.size()), mCommandBuffers.data());
     DestroyDependSwapChainObjects();
 
     RAD_LOG(ELogType::Renderer, ELogClass::Log, "Recreate to objects depend on swap chain.");
@@ -374,9 +392,9 @@ bool Renderer::CreateInstance()
     }
 
     uint32_t vkExtensionCount = 0;
-    vkEnumerateInstanceExtensionProperties(nullptr, &vkExtensionCount, nullptr);
+    VK_ASSERT(vkEnumerateInstanceExtensionProperties(nullptr, &vkExtensionCount, nullptr));
     mVkExtensions.resize(vkExtensionCount);
-    vkEnumerateInstanceExtensionProperties(nullptr, &vkExtensionCount, mVkExtensions.data());
+    VK_ASSERT(vkEnumerateInstanceExtensionProperties(nullptr, &vkExtensionCount, mVkExtensions.data()));
     for (size_t i = 0; i < requiredExtensions.size(); ++i)
     {
         const char* requireExtension = requiredExtensions[i];
@@ -392,9 +410,9 @@ bool Renderer::CreateInstance()
     }
 
     uint32_t vkLayerCount = 0;
-    vkEnumerateInstanceLayerProperties(&vkLayerCount, nullptr);
+    VK_ASSERT(vkEnumerateInstanceLayerProperties(&vkLayerCount, nullptr));
     mVkLayers.resize(vkLayerCount);
-    vkEnumerateInstanceLayerProperties(&vkLayerCount, mVkLayers.data());
+    VK_ASSERT(vkEnumerateInstanceLayerProperties(&vkLayerCount, mVkLayers.data()));
 #if !defined NDEBUG 
     if (mbEnableValidationLayer && !CheckValidationLayerSupport())
     {
@@ -439,7 +457,7 @@ bool Renderer::CreateSurface()
 bool Renderer::PickPhysicalDevice()
 {
     uint32_t deviceCount = 0;;
-    vkEnumeratePhysicalDevices(mInstance, &deviceCount, nullptr);
+    VK_ASSERT(vkEnumeratePhysicalDevices(mInstance, &deviceCount, nullptr));
     if (deviceCount == 0)
     {
         RAD_LOG(ELogType::Renderer, ELogClass::Error, "There are no graphics devices that support Vulkan.");
@@ -447,7 +465,7 @@ bool Renderer::PickPhysicalDevice()
     }
 
     std::vector<VkPhysicalDevice> vkDevices(deviceCount);
-    vkEnumeratePhysicalDevices(mInstance, &deviceCount, vkDevices.data());
+    VK_ASSERT(vkEnumeratePhysicalDevices(mInstance, &deviceCount, vkDevices.data()));
     for (VkPhysicalDevice device : vkDevices)
     {
         if (IsDeviceSuitable(device))
@@ -468,35 +486,33 @@ bool Renderer::PickPhysicalDevice()
 
 bool Renderer::CreateLogicalDevice()
 {
-    QueueFamilyIndices indices = FindQueueFamily(mPhysicalDevice);
+    QueueFamilyIndices indices = FindQueueFamilies(mPhysicalDevice);
     if (QueueFamilyIndices::IsValidQueueFamilyIndices(indices) == false)
     {
         return false;
     }
 
-    std::vector<VkDeviceQueueCreateInfo> queueCreatInfos;
-    std::unordered_set<uint32_t> uniqueQueueFamilies;
-    uniqueQueueFamilies.insert(indices.GraphicFamily.value());
-    uniqueQueueFamilies.insert(indices.PresentFamily.value());
+    std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
+    std::vector<uint32_t> uniqueQueueFamilies = QueueFamilyIndices::GetUniqueFamilies(indices);
 
     float queuePriority = 1.f;
     for (uint32_t queueFamily : uniqueQueueFamilies)
     {
         VkDeviceQueueCreateInfo queueCreateInfo = {};
         queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-        queueCreateInfo.queueFamilyIndex = indices.GraphicFamily.value();
+        queueCreateInfo.queueFamilyIndex = queueFamily;
         queueCreateInfo.queueCount = 1;
         queueCreateInfo.pQueuePriorities = &queuePriority;
 
-        queueCreatInfos.push_back(queueCreateInfo);
+        queueCreateInfos.push_back(queueCreateInfo);
     }
 
     VkPhysicalDeviceFeatures deviceFeatures = {};
 
     VkDeviceCreateInfo deviceCreateInfo = {};
     deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-    deviceCreateInfo.pQueueCreateInfos = queueCreatInfos.data();
-    deviceCreateInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreatInfos.size());
+    deviceCreateInfo.pQueueCreateInfos = queueCreateInfos.data();
+    deviceCreateInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
     deviceCreateInfo.pEnabledFeatures = &deviceFeatures;
     deviceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(mDeviceExtensions.size());
     deviceCreateInfo.ppEnabledExtensionNames = mDeviceExtensions.data();
@@ -523,9 +539,10 @@ bool Renderer::CreateLogicalDevice()
 
     vkGetDeviceQueue(mDevice, indices.GraphicFamily.value(), 0, &mGraphicsQueue);
     vkGetDeviceQueue(mDevice, indices.PresentFamily.value(), 0, &mPresentQueue);
+    vkGetDeviceQueue(mDevice, indices.TransferFamily.value(), 0, &mTransferQueue);
 
     return true;
-    }
+}
 
 bool Renderer::CreateSwapChain()
 {
@@ -551,22 +568,15 @@ bool Renderer::CreateSwapChain()
     swapChainCreateInfo.imageArrayLayers = 1;
     swapChainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
-    QueueFamilyIndices indices = FindQueueFamily(mPhysicalDevice);
+    QueueFamilyIndices indices = FindQueueFamilies(mPhysicalDevice);
     assert(QueueFamilyIndices::IsValidQueueFamilyIndices(indices) == true);
-    uint32_t queueFamilyIndices[2] = { indices.GraphicFamily.value(), indices.PresentFamily.value() };
+    std::vector<uint32_t> uniqueQueueFamilies = QueueFamilyIndices::GetUniqueFamilies(indices);
 
-    if (indices.GraphicFamily != indices.PresentFamily)
-    {
-        swapChainCreateInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
-        swapChainCreateInfo.queueFamilyIndexCount = static_cast<uint32_t>(ArraySize(queueFamilyIndices));
-        swapChainCreateInfo.pQueueFamilyIndices = queueFamilyIndices;
-    }
-    else
-    {
-        swapChainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-        swapChainCreateInfo.queueFamilyIndexCount = 0;
-        swapChainCreateInfo.pQueueFamilyIndices = nullptr;
-    }
+    // Graphics queue와 Transfer queue가 다르도록 강제하기에 CONCURRENT 모드 사용.
+    // CONCURRENT 모드 사용 시에는 QueueFamilyIndex가 Unique 해야함.
+    swapChainCreateInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+    swapChainCreateInfo.queueFamilyIndexCount = static_cast<uint32_t>(uniqueQueueFamilies.size());
+    swapChainCreateInfo.pQueueFamilyIndices = uniqueQueueFamilies.data();
 
     swapChainCreateInfo.preTransform = details.Capabilities.currentTransform;
     swapChainCreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
@@ -585,9 +595,9 @@ bool Renderer::CreateSwapChain()
     mSwapChainImageFormat = surfaceFormat.format;
 
     uint32_t swapImageCount = 0;
-    vkGetSwapchainImagesKHR(mDevice, mSwapChain, &swapImageCount, nullptr);
+    VK_ASSERT(vkGetSwapchainImagesKHR(mDevice, mSwapChain, &swapImageCount, nullptr));
     mSwapChainImages.resize(swapImageCount);
-    vkGetSwapchainImagesKHR(mDevice, mSwapChain, &swapImageCount, mSwapChainImages.data());
+    VK_ASSERT(vkGetSwapchainImagesKHR(mDevice, mSwapChain, &swapImageCount, mSwapChainImages.data()));
 
     // Begin create swap chain image views
     mSwapChainImageViews.resize(mSwapChainImages.size());
@@ -901,19 +911,28 @@ bool Renderer::CreateFrameBuffers()
     return true;
 }
 
-bool Renderer::CreateCommandPool()
+bool Renderer::CreateCommandPools()
 {
-    QueueFamilyIndices queueFamilyIndices = FindQueueFamily(mPhysicalDevice);
+    QueueFamilyIndices queueFamilyIndices = FindQueueFamilies(mPhysicalDevice);
 
     VkCommandPoolCreateInfo commandPoolCreateInfo = {};
     commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     commandPoolCreateInfo.queueFamilyIndex = queueFamilyIndices.GraphicFamily.value();
     commandPoolCreateInfo.flags = 0;
 
-    const VkResult result = vkCreateCommandPool(mDevice, &commandPoolCreateInfo, nullptr, &mCommandPool);
+    VkResult result = vkCreateCommandPool(mDevice, &commandPoolCreateInfo, nullptr, &mGraphicsCommandPool);
     if (result != VK_SUCCESS)
     {
-        RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to create command pool.");
+        RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to create graphics command pool.");
+        return false;
+    }
+
+    commandPoolCreateInfo.queueFamilyIndex = queueFamilyIndices.TransferFamily.value();
+    commandPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT; // CommandBuffer의 수명이 짧다는 힌트 플래그.
+    result = vkCreateCommandPool(mDevice, &commandPoolCreateInfo, nullptr, &mTransferCommandPool);
+    if (result != VK_SUCCESS)
+    {
+        RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to create transfer command pool.");
         return false;
     }
 
@@ -922,39 +941,40 @@ bool Renderer::CreateCommandPool()
 
 bool Renderer::CreateVertexBuffer()
 {
-    VkBufferCreateInfo bufferCreateInfo = {};
-    bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    bufferCreateInfo.size = sizeof(Vertex) * Vertex::Vertices.size();
-    bufferCreateInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-    bufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    const VkDeviceSize bufferSize = sizeof(Vertex) * Vertex::Vertices.size();
 
-    VkResult result = vkCreateBuffer(mDevice, &bufferCreateInfo, nullptr, &mVertexBuffer);
-    if (result != VK_SUCCESS)
+    // 스테이징 소스 버퍼 생성
+    VkBuffer stagingBuffer;
+    VkDeviceMemory stagingBufferMemory;
+    bool bResult = CreateBuffer(
+        &stagingBuffer, 
+        &stagingBufferMemory, 
+        bufferSize, 
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    if (!bResult)
     {
         return false;
     }
-
-    VkMemoryRequirements memRequirements;
-    vkGetBufferMemoryRequirements(mDevice, mVertexBuffer, &memRequirements);
-
-    VkMemoryAllocateInfo allocInfo = {};
-    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    allocInfo.allocationSize = memRequirements.size;
-    const VkMemoryPropertyFlags memFlag = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    allocInfo.memoryTypeIndex = FindPhysicalMemoryType(memRequirements.memoryTypeBits, memFlag);
-
-    result = vkAllocateMemory(mDevice, &allocInfo, nullptr, &mVertexBufferMemory);
-    if (result != VK_SUCCESS)
-    {
-        return false;
-    }
-
-    vkBindBufferMemory(mDevice, mVertexBuffer, mVertexBufferMemory, 0);
 
     void* data;
-    vkMapMemory(mDevice, mVertexBufferMemory, 0, VK_WHOLE_SIZE, 0, &data);
-    memcpy(data, Vertex::Vertices.data(), static_cast<size_t>(bufferCreateInfo.size));
-    vkUnmapMemory(mDevice, mVertexBufferMemory);
+    VK_ASSERT(vkMapMemory(mDevice, stagingBufferMemory, 0, VK_WHOLE_SIZE, 0, &data));
+    memcpy(data, Vertex::Vertices.data(), bufferSize);
+    vkUnmapMemory(mDevice, stagingBufferMemory);
+
+    // 스테이징 데스티네이션 버퍼 생성
+    bResult = CreateBuffer(
+        &mVertexBuffer,
+        &mVertexBufferMemory,
+        bufferSize,
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+    // 내부에서 TransferQueue가 비워질 때 까지 Wait 함.
+    CopyBuffer(stagingBuffer, mVertexBuffer, bufferSize);
+
+    vkDestroyBuffer(mDevice, stagingBuffer, nullptr);
+    vkFreeMemory(mDevice, stagingBufferMemory, nullptr);
 
     return true;
 }
@@ -965,7 +985,7 @@ bool Renderer::CreateCommandBuffers()
 
     VkCommandBufferAllocateInfo allocInfo = {};
     allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    allocInfo.commandPool = mCommandPool;
+    allocInfo.commandPool = mGraphicsCommandPool;
     allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     allocInfo.commandBufferCount = static_cast<uint32_t>(mCommandBuffers.size());
 
@@ -1125,7 +1145,7 @@ bool Renderer::IsDeviceSuitable(VkPhysicalDevice physicalDevice) const
     VkPhysicalDeviceFeatures deviceFeatures;
     vkGetPhysicalDeviceFeatures(physicalDevice, &deviceFeatures);
 
-    QueueFamilyIndices indices = FindQueueFamily(physicalDevice);
+    QueueFamilyIndices indices = FindQueueFamilies(physicalDevice);
 
     const bool bIsValidQueueFamilies = QueueFamilyIndices::IsValidQueueFamilyIndices(indices);
     const bool bExtensionSupported = CheckDeviceExtensionSupport(physicalDevice);
@@ -1146,10 +1166,10 @@ bool Renderer::IsDeviceSuitable(VkPhysicalDevice physicalDevice) const
 bool Renderer::CheckDeviceExtensionSupport(VkPhysicalDevice physicalDevice) const
 {
     uint32_t extensionCount = 0;
-    vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &extensionCount, nullptr);
+    VK_ASSERT(vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &extensionCount, nullptr));
 
     std::vector<VkExtensionProperties> extensions(extensionCount);
-    vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &extensionCount, extensions.data());
+    VK_ASSERT(vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &extensionCount, extensions.data()));
 
     for (const char* extensionName : mDeviceExtensions)
     {
@@ -1166,7 +1186,7 @@ bool Renderer::CheckDeviceExtensionSupport(VkPhysicalDevice physicalDevice) cons
     return true;
 }
 
-QueueFamilyIndices Renderer::FindQueueFamily(VkPhysicalDevice physicalDevice) const
+QueueFamilyIndices Renderer::FindQueueFamilies(VkPhysicalDevice physicalDevice) const
 {
     QueueFamilyIndices indices;
     uint32_t queueFamilyCount = 0;
@@ -1184,16 +1204,34 @@ QueueFamilyIndices Renderer::FindQueueFamily(VkPhysicalDevice physicalDevice) co
         }
 
         const VkQueueFamilyProperties& queueFamily = queueFamilies[i];
-        if ((queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0)
+        const bool bMatchGraphicsBit = (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0;
+        const bool bMatchTransferBit = (queueFamily.queueFlags & VK_QUEUE_TRANSFER_BIT) != 0;
+
+        if (indices.GraphicFamily.has_value() == false)
         {
-            indices.GraphicFamily = index;
+            if (bMatchGraphicsBit)
+            {
+                indices.GraphicFamily = index;
+            }
         }
 
-        VkBool32 bSupportPresent = false;
-        vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, index, mSurface, &bSupportPresent);
-        if (bSupportPresent)
+        if (indices.PresentFamily.has_value() == false)
         {
-            indices.PresentFamily = index;
+            VkBool32 bSupportPresent = false;
+            VK_ASSERT(vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, index, mSurface, &bSupportPresent));
+            if (bSupportPresent)
+            {
+                indices.PresentFamily = index;
+            }
+        }
+
+        if (indices.TransferFamily.has_value() == false)
+        {
+            // Graphics bit이 set 된 Queue는 암시적으로 Transfer bit이 set 됨.
+            if (!bMatchGraphicsBit && bMatchTransferBit)
+            {
+                indices.TransferFamily = index;
+            }
         }
     }
 
@@ -1204,17 +1242,17 @@ SwapChainSupportDetails Renderer::QuerySwapCahinSupport(VkPhysicalDevice physica
 {
     SwapChainSupportDetails details;
 
-    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, mSurface, &details.Capabilities);
+    VK_ASSERT(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, mSurface, &details.Capabilities));
 
     uint32_t formatCount = 0;
-    vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, mSurface, &formatCount, nullptr);
+    VK_ASSERT(vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, mSurface, &formatCount, nullptr));
     details.Formats.resize(formatCount);
-    vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, mSurface, &formatCount, details.Formats.data());
+    VK_ASSERT(vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, mSurface, &formatCount, details.Formats.data()));
 
     uint32_t presentModeCount = 0;
-    vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, mSurface, &presentModeCount, nullptr);
+    VK_ASSERT(vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, mSurface, &presentModeCount, nullptr));
     details.PresentModes.resize(presentModeCount);
-    vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, mSurface, &presentModeCount, details.PresentModes.data());
+    VK_ASSERT(vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, mSurface, &presentModeCount, details.PresentModes.data()));
 
     return details;
 }
@@ -1299,6 +1337,79 @@ uint32_t Renderer::FindPhysicalMemoryType(uint32_t typeFilter, VkMemoryPropertyF
 
     RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to find suitable physical device memory type.");
     return UINT32_MAX;
+}
+
+bool Renderer::CreateBuffer(VkBuffer* outBuffer, VkDeviceMemory* outBufferMemory, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties) const
+{
+    VkBufferCreateInfo bufferCreateInfo = {};
+    bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferCreateInfo.size = size;
+    bufferCreateInfo.usage = usage;
+    bufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    VkResult result = vkCreateBuffer(mDevice, &bufferCreateInfo, nullptr, outBuffer);
+    if (result != VK_SUCCESS)
+    {
+        RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to create buffer.");
+        return false;
+    }
+
+    VkMemoryRequirements memRequirements;
+    vkGetBufferMemoryRequirements(mDevice, *outBuffer, &memRequirements);
+
+    VkMemoryAllocateInfo allocInfo = {};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = memRequirements.size;
+    const VkMemoryPropertyFlags memFlag = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    allocInfo.memoryTypeIndex = FindPhysicalMemoryType(memRequirements.memoryTypeBits, memFlag);
+
+    result = vkAllocateMemory(mDevice, &allocInfo, nullptr, outBufferMemory);
+    if (result != VK_SUCCESS)
+    {
+        RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to allocate buffer memory.");
+        return false;
+    }
+
+    vkBindBufferMemory(mDevice, *outBuffer, *outBufferMemory, 0);
+
+    return true;
+}
+
+void Renderer::CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size)
+{
+    VkCommandBufferAllocateInfo allocInfo = {};
+    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocInfo.commandPool = mTransferCommandPool;
+    allocInfo.commandBufferCount = 1;
+
+    VkCommandBuffer commandBuffer;
+    VK_ASSERT(vkAllocateCommandBuffers(mDevice, &allocInfo, &commandBuffer));
+
+    VkCommandBufferBeginInfo beginInfo = {};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+    VK_ASSERT(vkBeginCommandBuffer(commandBuffer, &beginInfo));
+
+    VkBufferCopy copyRegion = {};
+    copyRegion.srcOffset = 0;
+    copyRegion.dstOffset = 0;
+    copyRegion.size = size;
+
+    vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
+
+    VK_ASSERT(vkEndCommandBuffer(commandBuffer));
+
+    VkSubmitInfo submitInfo = {};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &commandBuffer;
+
+    VK_ASSERT(vkQueueSubmit(mTransferQueue, 1, &submitInfo, VK_NULL_HANDLE));
+    VK_ASSERT(vkQueueWaitIdle(mTransferQueue));
+
+    vkFreeCommandBuffers(mDevice, mTransferCommandPool, 1, &commandBuffer);
 }
 
 VKAPI_ATTR VkBool32 VKAPI_CALL Renderer::OnVkDebugLog(

@@ -14,8 +14,10 @@ struct QueueFamilyIndices
 {
     std::optional<uint32_t> GraphicFamily;
     std::optional<uint32_t> PresentFamily;
+    std::optional<uint32_t> TransferFamily;
 
     static bool IsValidQueueFamilyIndices(const QueueFamilyIndices& indices);
+    static std::vector<uint32_t> GetUniqueFamilies(const QueueFamilyIndices& indices);
 
 };
 
@@ -54,7 +56,7 @@ private:
     bool CreateRenderPass();
     bool CreateGraphicsPipeline();
     bool CreateFrameBuffers();
-    bool CreateCommandPool();
+    bool CreateCommandPools();
     bool CreateVertexBuffer();
     bool CreateCommandBuffers();
     bool CreateSyncObjects();
@@ -64,7 +66,7 @@ private:
     void PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo) const;
     bool IsDeviceSuitable(VkPhysicalDevice physicalDevice) const;
     bool CheckDeviceExtensionSupport(VkPhysicalDevice physicalDevice) const;
-    QueueFamilyIndices FindQueueFamily(VkPhysicalDevice physicalDevice) const;
+    QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice physicalDevice) const;
     SwapChainSupportDetails QuerySwapCahinSupport(VkPhysicalDevice physicalDevice) const;
     bool CreateShaderModule(VkShaderModule* outShaderModule, const std::vector<uint8_t>& shaderBinary);
 
@@ -73,6 +75,8 @@ private:
     VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilites) const;
 
     uint32_t FindPhysicalMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) const;
+    bool CreateBuffer(VkBuffer* outBuffer, VkDeviceMemory* outBufferMemory, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties) const;
+    void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 
     static VKAPI_ATTR VkBool32 VKAPI_CALL OnVkDebugLog(
         VkDebugUtilsMessageSeverityFlagBitsEXT messageServerity,
@@ -89,12 +93,14 @@ private:
     VkDevice mDevice;
     VkQueue mGraphicsQueue;
     VkQueue mPresentQueue;
+    VkQueue mTransferQueue;
     VkSurfaceKHR mSurface;
     VkSwapchainKHR mSwapChain;
     VkRenderPass mRenderPass;
     VkPipelineLayout mPipelineLayout;
     VkPipeline mGraphicPipeline;
-    VkCommandPool mCommandPool;
+    VkCommandPool mGraphicsCommandPool;
+    VkCommandPool mTransferCommandPool;
 
     VkBuffer mVertexBuffer;
     VkDeviceMemory mVertexBufferMemory;
