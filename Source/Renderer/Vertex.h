@@ -12,7 +12,9 @@ struct Vertex
     glm::vec2 Pos;
     glm::vec3 Color;
 
+    // 개발 용 임시 값
     static const std::vector<Vertex> Vertices;
+    static const std::vector<uint16_t> Indices;
 
 public:
     static constexpr VkVertexInputBindingDescription GetVkBindingDescription();

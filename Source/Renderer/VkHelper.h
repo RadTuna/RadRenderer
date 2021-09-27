@@ -32,14 +32,4 @@ void DestroyDebugUtilsMessengerEXT(
 
 bool TryReadShaderFile(std::vector<uint8_t>*outBinary, const std::string& filePath);
 
-bool CreateBuffer(
-    VkBuffer* outBuffer, 
-    VkDeviceMemory* outMemory, 
-    VkPhysicalDevice physicalDevice, 
-    VkDeviceSize size, 
-    VkBufferUsageFlags usage, 
-    VkMemoryPropertyFlags properties);
-
-uint32_t FindPhysicalMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
-
 // End functions

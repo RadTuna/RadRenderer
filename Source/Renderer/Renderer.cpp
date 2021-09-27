@@ -154,6 +154,12 @@ bool Renderer::Initialize()
         return false;
     }
 
+    bResult = CreateIndexBuffer();
+    if (!bResult)
+    {
+        return false;
+    }
+
     bResult = CreateCommandBuffers();
     if (!bResult)
     {
@@ -181,9 +187,18 @@ void Renderer::Loop()
 
     uint32_t imageIndex;
     VkResult result = vkAcquireNextImageKHR(mDevice, mSwapChain, UINT64_MAX, mImageAvailableSemaphores[mCurrentFrame], VK_NULL_HANDLE, &imageIndex);
-    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
+    if (result == VK_ERROR_OUT_OF_DATE_KHR)
     {
         RecreateDependSwapChainObjects();
+        return;
+    }
+    else if (result == VK_SUBOPTIMAL_KHR) // 이미지를 얻는 것에는 성공. 하지만 스왑체인 재생성 필요.
+    {
+        FrameBufferResized();
+    }
+    else if (result != VK_SUCCESS)
+    {
+        RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to aquire swap chain image.");
         return;
     }
 
@@ -230,12 +245,7 @@ void Renderer::Loop()
     presentInfo.pResults = nullptr;
 
     result = vkQueuePresentKHR(mPresentQueue, &presentInfo);
-    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
-    {
-        RecreateDependSwapChainObjects();
-    }
-
-    if (mbFrameBufferResized)
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || mbFrameBufferResized)
     {
         RecreateDependSwapChainObjects();
     }
@@ -259,6 +269,9 @@ void Renderer::Deinitialize()
     vkDestroyCommandPool(mDevice, mTransferCommandPool, nullptr);
     vkDestroyCommandPool(mDevice, mGraphicsCommandPool, nullptr);
 
+    vkDestroyBuffer(mDevice, mIndexBuffer, nullptr);
+    vkFreeMemory(mDevice, mIndexBufferMemory, nullptr);
+
     vkDestroyBuffer(mDevice, mVertexBuffer, nullptr);
     vkFreeMemory(mDevice, mVertexBufferMemory, nullptr);
 
@@ -279,6 +292,8 @@ void Renderer::Deinitialize()
 
 bool Renderer::RecreateDependSwapChainObjects()
 {
+    VK_ASSERT(vkDeviceWaitIdle(mDevice));
+
     int width = 0;
     int height = 0;
     glfwGetFramebufferSize(mApp->GetWindowObject(), &width, &height);
@@ -287,12 +302,8 @@ bool Renderer::RecreateDependSwapChainObjects()
         return false;
     }
 
-    VK_ASSERT(vkDeviceWaitIdle(mDevice));
-
     vkFreeCommandBuffers(mDevice, mGraphicsCommandPool, static_cast<uint32_t>(mCommandBuffers.size()), mCommandBuffers.data());
     DestroyDependSwapChainObjects();
-
-    RAD_LOG(ELogType::Renderer, ELogClass::Log, "Recreate to objects depend on swap chain.");
 
     bool bResult = CreateSwapChain();
     if (!bResult)
@@ -323,6 +334,9 @@ bool Renderer::RecreateDependSwapChainObjects()
     {
         return false;
     }
+
+    RAD_LOG(ELogType::Renderer, ELogClass::Log, "Recreate to objects depend on swap chain.");
+    mbFrameBufferResized = false;
 
     return true;
 }
@@ -969,9 +983,57 @@ bool Renderer::CreateVertexBuffer()
         bufferSize,
         VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    if (!bResult)
+    {
+        return false;
+    }
 
     // 내부에서 TransferQueue가 비워질 때 까지 Wait 함.
     CopyBuffer(stagingBuffer, mVertexBuffer, bufferSize);
+
+    vkDestroyBuffer(mDevice, stagingBuffer, nullptr);
+    vkFreeMemory(mDevice, stagingBufferMemory, nullptr);
+
+    return true;
+}
+
+bool Renderer::CreateIndexBuffer()
+{
+    const VkDeviceSize bufferSize = sizeof(uint16_t) * Vertex::Indices.size();
+
+    // 스테이징 소스 버퍼 생성
+    VkBuffer stagingBuffer;
+    VkDeviceMemory stagingBufferMemory;
+    bool bResult = CreateBuffer(
+        &stagingBuffer,
+        &stagingBufferMemory,
+        bufferSize,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    if (!bResult)
+    {
+        return false;
+    }
+
+    void* data;
+    VK_ASSERT(vkMapMemory(mDevice, stagingBufferMemory, 0, VK_WHOLE_SIZE, 0, &data));
+    memcpy(data, Vertex::Indices.data(), bufferSize);
+    vkUnmapMemory(mDevice, stagingBufferMemory);
+
+    // 스테이징 데스티네이션 버퍼 생성
+    bResult = CreateBuffer(
+        &mIndexBuffer,
+        &mIndexBufferMemory,
+        bufferSize,
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    if (!bResult)
+    {
+        return false;
+    }
+
+    // 내부에서 TransferQueue가 비워질 때 까지 Wait 함.
+    CopyBuffer(stagingBuffer, mIndexBuffer, bufferSize);
 
     vkDestroyBuffer(mDevice, stagingBuffer, nullptr);
     vkFreeMemory(mDevice, stagingBufferMemory, nullptr);
@@ -1032,8 +1094,9 @@ bool Renderer::CreateCommandBuffers()
         VkBuffer vertexBuffers[] = { mVertexBuffer };
         VkDeviceSize offsets[] = { 0 };
         vkCmdBindVertexBuffers(mCommandBuffers[i], 0, 1, vertexBuffers, offsets);
+        vkCmdBindIndexBuffer(mCommandBuffers[i], mIndexBuffer, 0, VK_INDEX_TYPE_UINT16);
 
-        vkCmdDraw(mCommandBuffers[i], static_cast<uint32_t>(Vertex::Vertices.size()), 1, 0, 0);
+        vkCmdDrawIndexed(mCommandBuffers[i], static_cast<uint32_t>(Vertex::Indices.size()), 1, 0, 0, 0);
 
         vkCmdEndRenderPass(mCommandBuffers[i]);
         // End render command

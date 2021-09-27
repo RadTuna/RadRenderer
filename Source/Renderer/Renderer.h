@@ -58,6 +58,7 @@ private:
     bool CreateFrameBuffers();
     bool CreateCommandPools();
     bool CreateVertexBuffer();
+    bool CreateIndexBuffer();
     bool CreateCommandBuffers();
     bool CreateSyncObjects();
 
@@ -104,6 +105,8 @@ private:
 
     VkBuffer mVertexBuffer;
     VkDeviceMemory mVertexBufferMemory;
+    VkBuffer mIndexBuffer;
+    VkDeviceMemory mIndexBufferMemory;
 
     std::vector<VkSemaphore> mImageAvailableSemaphores;
     std::vector<VkSemaphore> mRenderFinishedSemaphores;
