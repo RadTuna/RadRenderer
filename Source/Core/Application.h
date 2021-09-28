@@ -1,5 +1,8 @@
 #pragma once
 
+// Primary Include
+#include "Core/CoreHeader.h"
+
 // External Include
 #include <memory>
 #include <vector>

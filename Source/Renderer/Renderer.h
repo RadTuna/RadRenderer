@@ -1,8 +1,9 @@
 #pragma once
 
+// Primary Include
+#include "Renderer/RendererHeader.h"
+
 // External Include
-#include <vector>
-#include <string>
 #include <optional>
 #include <vulkan/vulkan.h>
 
@@ -54,11 +55,15 @@ private:
     bool CreateLogicalDevice();
     bool CreateSwapChain();
     bool CreateRenderPass();
+    bool CreateDescriptorSetLayout();
     bool CreateGraphicsPipeline();
     bool CreateFrameBuffers();
     bool CreateCommandPools();
     bool CreateVertexBuffer();
     bool CreateIndexBuffer();
+    bool CreateUniformBuffer();
+    bool CreateDescriptorPool();
+    bool CreateDescriptorSets();
     bool CreateCommandBuffers();
     bool CreateSyncObjects();
 
@@ -79,6 +84,9 @@ private:
     bool CreateBuffer(VkBuffer* outBuffer, VkDeviceMemory* outBufferMemory, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties) const;
     void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 
+    // temp transform function
+    void UpdateUniformBuffer(uint32_t currentImage);
+
     static VKAPI_ATTR VkBool32 VKAPI_CALL OnVkDebugLog(
         VkDebugUtilsMessageSeverityFlagBitsEXT messageServerity,
         VkDebugUtilsMessageTypeFlagsEXT messageType,
@@ -98,15 +106,20 @@ private:
     VkSurfaceKHR mSurface;
     VkSwapchainKHR mSwapChain;
     VkRenderPass mRenderPass;
+    VkDescriptorSetLayout mDescriptorSetLayout;
     VkPipelineLayout mPipelineLayout;
     VkPipeline mGraphicPipeline;
     VkCommandPool mGraphicsCommandPool;
     VkCommandPool mTransferCommandPool;
+    VkDescriptorPool mDescriptorPool;
 
     VkBuffer mVertexBuffer;
     VkDeviceMemory mVertexBufferMemory;
     VkBuffer mIndexBuffer;
     VkDeviceMemory mIndexBufferMemory;
+
+    std::vector<VkBuffer> mUniformBuffers;
+    std::vector<VkDeviceMemory> mUniformBufferMemories;
 
     std::vector<VkSemaphore> mImageAvailableSemaphores;
     std::vector<VkSemaphore> mRenderFinishedSemaphores;
@@ -126,8 +139,9 @@ private:
     VkFormat mSwapChainImageFormat;
 
     std::vector<VkFramebuffer> mSwapChainFrameBuffers;
-
     std::vector<VkCommandBuffer> mCommandBuffers;
+
+    std::vector<VkDescriptorSet> mDescriptorSets;
 
     bool mbEnableValidationLayer;
     bool mbFrameBufferResized;

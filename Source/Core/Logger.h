@@ -1,7 +1,5 @@
 #pragma once
 
-#include <cassert>
-
 #if !defined NDEBUG
 // External Include
 #include <vector>

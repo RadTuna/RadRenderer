@@ -1,5 +1,9 @@
 #pragma once
 
+// Primary Include
+#include "Core/CoreHeader.h"
+
+
 class Module
 {
 public:
