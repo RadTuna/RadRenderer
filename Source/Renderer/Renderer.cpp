@@ -78,6 +78,7 @@ Renderer::Renderer(class Application* inApp)
 {
     // required extension
     mDeviceExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+    mDeviceExtensions.push_back(VK_KHR_MAINTENANCE1_EXTENSION_NAME);
 
     // required layer
     mValidationLayers.push_back(DEFAULT_VALIDATION_LAYER_NAME);
@@ -829,9 +830,9 @@ bool Renderer::CreateGraphicsPipeline()
         // Begin viewport and scissor
         VkViewport viewport = {};
         viewport.x = 0.f;
-        viewport.y = 0.f;
+        viewport.y = static_cast<float>(mSwapChainExtent.height);
         viewport.width = static_cast<float>(mSwapChainExtent.width);
-        viewport.height = static_cast<float>(mSwapChainExtent.height);
+        viewport.height = -static_cast<float>(mSwapChainExtent.height);
         viewport.minDepth = 0.f;
         viewport.maxDepth = 1.f;
 
@@ -1671,7 +1672,7 @@ void Renderer::UpdateUniformBuffer(uint32_t currentImage)
 
     UniformBufferObject ubo = {};
     ubo.ModelMatrix = glm::rotate(glm::mat4(1.f), time * glm::radians(90.f), glm::vec3(0.f, 0.f, 1.f));
-    ubo.ViewMatrix = glm::lookAt(glm::vec3(2.f, 2.f, -2.f), glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, 0.f, 1.f));
+    ubo.ViewMatrix = glm::lookAt(glm::vec3(2.f, 2.f, 2.f), glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, 0.f, 1.f));
 
     const float aspect = static_cast<float>(mSwapChainExtent.width) / static_cast<float>(mSwapChainExtent.height);
     ubo.ProjMatrix = glm::perspective(glm::radians(45.f), aspect, 0.1f, 100.f);
