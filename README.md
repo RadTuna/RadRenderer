@@ -1,28 +1,23 @@
 # Rad Renderer
 A cross-platform renderer based on Vulkan.
-It aims to support Windows and Linux.
+It aims to support Windows.
 
 ## Preparations
 The following software is required to build RadRender.
-- CMake 3.8 or later
+- CMake 3.21 or later
     - Windows: Use Installer - https://cmake.org/download
-    - Linux(Ubuntu): Use APT - ```sudo apt install cmake```
 - Vulkan SDK
     - Windows: Use Installer - https://vulkan.lunarg.com/sdk/home  
-    - Linux(Ubuntu): Use APT - ```sudo apt install vulkan-sdk```
-- Conan package manager
-    - Windows and Linux(Ubuntu): Use Installer - https://conan.io  
 
 ## Installation
 If the above software is ready, follow the steps below to build it.  
-1. Run ```InstallDependencies.bat or .sh``` to install dependent libraries.  
-2. Run ```GenerateProject.bat or .sh``` to configure the Makefile.
-3. Builds are performed using the IDE or CMake command.
-    - CMake Command: ```cd Intermediate``` ```cmake --build .```
+1. Clone this repository and update the vcpkg submodule.
+2. Run ```vcpkg/bootstrap-vcpkg.bat``` to install vcpkg. 
+3. Run ```GenerateProject.bat``` to install dependent libraries and configure the Makefile.
+4. Builds can be performed using IDE or CMake commands.
 
 ## Recommended Compiler and Editor
-- Windows: MSVC + Visual Studio 2019
-- Linux: GCC + Visual Studio Code (with CMake, CMakeTools, C/C++ plugins)
+- Windows: MSVC + Visual Studio 2022
 
 ## Libraries
 Vulkan: https://www.vulkan.org/   

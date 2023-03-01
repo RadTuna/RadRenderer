@@ -1,15 +1,15 @@
 @echo off
 
 if defined VK_SDK_PATH (
-    set VK_COMPILER_PATH=%VK_SDK_PATH%/Bin32/glslc.exe
+    set VK_COMPILER_PATH=%VK_SDK_PATH%/Bin/glslc.exe
 ) else (
     if defined VULKAN_SDK (
-        set VK_COMPILER_PATH=%VULKAN_SDK%/Bin32/glslc.exe
+        set VK_COMPILER_PATH=%VULKAN_SDK%/Bin/glslc.exe
     ) else (
         echo Vulkan SDK environment variable not found.
         echo Please enter the Vulkan SDK path manually.
         set /p MANUAL_VK_SDK_PATH="Input:"
-        set VK_COMPILER_PATH=%MANUAL_VK_SDK_PATH%/Bin32/glslc.exe
+        set VK_COMPILER_PATH=%MANUAL_VK_SDK_PATH%/Bin/glslc.exe
         echo.
     )
 )

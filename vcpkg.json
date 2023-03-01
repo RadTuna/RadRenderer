@@ -1,0 +1,14 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "rad-renderer",
+  "description": "A cross-platform renderer based on Vulkan",
+  "version": "0.0.1",
+  "supports": "windows & x64",
+  "dependencies": [
+    "assimp",
+    "imgui",
+    "glm",
+    "glfw3",
+    "sail"
+  ]
+}

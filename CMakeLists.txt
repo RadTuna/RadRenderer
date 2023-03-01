@@ -2,18 +2,22 @@
 # CMake settings for rad renderer #
 ###################################
 
-# required cmake over 3.8 ver
-cmake_minimum_required(VERSION 3.8)
+# required cmake over 3.21 ver
+cmake_minimum_required(VERSION 3.21)
 
 # using cpp 17
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# export compile command for vscode
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+# setup vcpkg
+set(VCPKG_INSTALLED_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vcpkg_installed)
+set(VCPKG_MANIFEST_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 
-# set project name
+# set project
 project(RadRenderer)
+
+# set visual studio settings
+VS_STARTUP_PROJECT(${PROJECT_NAME})
 
 # set base variables
 set(SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/Source)
@@ -38,32 +42,31 @@ set(CMAKE_SUPPRESS_REGENERATION true)
 #include source
 include_directories(${SOURCE_DIR})
 
-#include conan package
-set(CONAN_DIR ${CMAKE_CURRENT_SOURCE_DIR}/Conan)
-include(${CONAN_DIR}/conanbuildinfo.cmake)
-conan_basic_setup(TARGETS NO_OUTPUT_DIRS)
+# find vcpkg packages
+find_package(assimp REQUIRED)
+find_package(imgui REQUIRED)
+find_package(glm REQUIRED)
+find_package(glfw3 REQUIRED)
+find_package(SailC++ REQUIRED)
+
+# find vulkan sdk
+find_package(Vulkan REQUIRED)
+include_directories(${Vulkan_INCLUDE_DIRS})
 
 # set executable
 if (WIN32)
     add_executable(${PROJECT_NAME} WIN32 ${ALL_FILES})
-elseif (UNIX)
-    add_executable(${PROJECT_NAME} ${ALL_FILES})
 else()
     message(FATEL_ERROR "You can't build cmake from this platform")
 endif()
 
-# link conan packages
-target_link_libraries(${PROJECT_NAME} CONAN_PKG::assimp)
-target_link_libraries(${PROJECT_NAME} CONAN_PKG::imgui)
-target_link_libraries(${PROJECT_NAME} CONAN_PKG::glm)
-target_link_libraries(${PROJECT_NAME} CONAN_PKG::glfw)
-target_link_libraries(${PROJECT_NAME} CONAN_PKG::openimageio)
+# link vcpkg packages
+target_link_libraries(${PROJECT_NAME} assimp::assimp)
+target_link_libraries(${PROJECT_NAME} imgui::imgui)
+target_link_libraries(${PROJECT_NAME} glm::glm)
+target_link_libraries(${PROJECT_NAME} glfw)
+target_link_libraries(${PROJECT_NAME} SAIL::sail-c++)
 
 # link vulkan sdk
-find_package(Vulkan REQUIRED)
-include_directories(${Vulkan_INCLUDE_DIRS})
 target_link_libraries(${PROJECT_NAME} Vulkan::Vulkan)
-
-
-
 

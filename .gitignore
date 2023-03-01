@@ -2,12 +2,12 @@
 # Rad Renderer git ignore #
 ###########################
 
-# Folder
+# directories
 /.vs
 /Binaries
 /Intermediate
-/Conan
 /Logs
+/vcpkg_installed
 
-#file
+#files
 *.spv
