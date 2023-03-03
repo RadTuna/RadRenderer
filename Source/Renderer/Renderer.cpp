@@ -17,9 +17,12 @@
 #include "Core/Application.h"
 #include "Core/Logger.h"
 #include "Core/Helper.h"
-#include "Renderer/Vertex.h"
 #include "Renderer/VkHelper.h"
-#include "Renderer/UniformBuffer.h"
+#include "Renderer/Resources/Vertex.h"
+#include "Renderer/Resources/UniformBuffer.h"
+#include "Renderer/Resources/VertexBuffer.h"
+#include "Renderer/Resources/IndexBuffer.h"
+
 
 
 constexpr char* DEFAULT_VALIDATION_LAYER_NAME = "VK_LAYER_KHRONOS_validation";
@@ -65,10 +68,6 @@ Renderer::Renderer(class Application* inApp)
     , mGraphicsCommandPool(VK_NULL_HANDLE)
     , mTransferCommandPool(VK_NULL_HANDLE)
     , mDescriptorPool(VK_NULL_HANDLE)
-    , mVertexBuffer(VK_NULL_HANDLE)
-    , mVertexBufferMemory(VK_NULL_HANDLE)
-    , mIndexBuffer(VK_NULL_HANDLE)
-    , mIndexBufferMemory(VK_NULL_HANDLE)
     , mCurrentFrame(0)
     , mSwapChainExtent{ 0, }
     , mSwapChainImageFormat(VK_FORMAT_UNDEFINED)
@@ -305,11 +304,8 @@ void Renderer::Deinitialize()
     vkDestroyCommandPool(mDevice, mTransferCommandPool, nullptr);
     vkDestroyCommandPool(mDevice, mGraphicsCommandPool, nullptr);
 
-    vkDestroyBuffer(mDevice, mIndexBuffer, nullptr);
-    vkFreeMemory(mDevice, mIndexBufferMemory, nullptr);
-
-    vkDestroyBuffer(mDevice, mVertexBuffer, nullptr);
-    vkFreeMemory(mDevice, mVertexBufferMemory, nullptr);
+    mVertexBuffer = nullptr;
+    mIndexBuffer = nullptr;
 
     vkDestroyDescriptorSetLayout(mDevice, mDescriptorSetLayout, nullptr);
 
@@ -320,7 +316,7 @@ void Renderer::Deinitialize()
 #if !defined NDEBUG
     if (mbEnableValidationLayer)
     {
-        DestroyDebugUtilsMessengerEXT(mInstance, mDebugMessenger, nullptr);
+        VkHelper::DestroyDebugUtilsMessengerEXT(mInstance, mDebugMessenger, nullptr);
     }
 #endif
     vkDestroyInstance(mInstance, nullptr);
@@ -404,11 +400,9 @@ void Renderer::DestroyDependSwapChainObjects()
         vkDestroyFramebuffer(mDevice, frameBuffer, nullptr);
     }
 
-    assert(mUniformBuffers.size() == mUniformBufferMemories.size());
     for (size_t i = 0; i < mUniformBuffers.size(); ++i)
     {
-        vkDestroyBuffer(mDevice, mUniformBuffers[i], nullptr);
-        vkFreeMemory(mDevice, mUniformBufferMemories[i], nullptr);
+        mUniformBuffers[i] = nullptr;
     }
 
     vkDestroyDescriptorPool(mDevice, mDescriptorPool, nullptr);
@@ -509,7 +503,7 @@ bool Renderer::CreateDebugMessenger()
     VkDebugUtilsMessengerCreateInfoEXT createInfo = {};
     PopulateDebugMessengerCreateInfo(createInfo);
 
-    VkResult result = CreateDebugUtilsMessengerEXT(mInstance, &createInfo, nullptr, &mDebugMessenger);
+    VkResult result = VkHelper::CreateDebugUtilsMessengerEXT(mInstance, &createInfo, nullptr, &mDebugMessenger);
     if (result != VK_SUCCESS)
     {
         RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to create Vulkan debug messenger.");
@@ -764,13 +758,13 @@ bool Renderer::CreateGraphicsPipeline()
 
     std::vector<uint8_t> vertShaderBinary;
     std::vector<uint8_t> fragShaderBinary;
-    bool bResult = TryReadShaderFile(&vertShaderBinary, VERT_SHADER_PATH);
+    bool bResult = VkHelper::TryReadShaderFile(&vertShaderBinary, VERT_SHADER_PATH);
     if (!bResult)
     {
         return bResult;
     }
 
-    bResult = TryReadShaderFile(&fragShaderBinary, FRAG_SHADER_PATH);
+    bResult = VkHelper::TryReadShaderFile(&fragShaderBinary, FRAG_SHADER_PATH);
     if (!bResult)
     {
         return bResult;
@@ -1050,87 +1044,33 @@ bool Renderer::CreateVertexBuffer()
 {
     const VkDeviceSize bufferSize = sizeof(Vertex) * Vertex::Vertices.size();
 
-    // 스테이징 소스 버퍼 생성
-    VkBuffer stagingBuffer;
-    VkDeviceMemory stagingBufferMemory;
-    bool bResult = CreateBuffer(
-        &stagingBuffer,
-        &stagingBufferMemory,
-        bufferSize,
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-    if (!bResult)
+    mVertexBuffer = std::make_unique<VertexBuffer>(mDevice, bufferSize);
+    const bool bCreateResult = mVertexBuffer->CreateBuffer(mPhysicalDevice);
+    if (!bCreateResult)
     {
-        return bResult;
+        return false;
     }
 
-    void* data;
-    VK_ASSERT(vkMapMemory(mDevice, stagingBufferMemory, 0, VK_WHOLE_SIZE, 0, &data));
-    memcpy(data, Vertex::Vertices.data(), bufferSize);
-    vkUnmapMemory(mDevice, stagingBufferMemory);
+    mVertexBuffer->MapStagingBuffer((void*)Vertex::Vertices.data(), bufferSize);
+    mVertexBuffer->TransferBuffer(mTransferCommandPool, mTransferQueue);
 
-    // 스테이징 데스티네이션 버퍼 생성
-    bResult = CreateBuffer(
-        &mVertexBuffer,
-        &mVertexBufferMemory,
-        bufferSize,
-        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-    if (!bResult)
-    {
-        goto EXIT_CLEAR_BUFFER;
-    }
-
-    // 내부에서 TransferQueue가 비워질 때 까지 Wait 함.
-    CopyBuffer(stagingBuffer, mVertexBuffer, bufferSize);
-
-EXIT_CLEAR_BUFFER:
-    vkDestroyBuffer(mDevice, stagingBuffer, nullptr);
-    vkFreeMemory(mDevice, stagingBufferMemory, nullptr);
-
-    return bResult;
+    return true;
 }
 
 bool Renderer::CreateIndexBuffer()
 {
     const VkDeviceSize bufferSize = sizeof(uint16_t) * Vertex::Indices.size();
 
-    // 스테이징 소스 버퍼 생성
-    VkBuffer stagingBuffer;
-    VkDeviceMemory stagingBufferMemory;
-    bool bResult = CreateBuffer(
-        &stagingBuffer,
-        &stagingBufferMemory,
-        bufferSize,
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-    if (!bResult)
+    mIndexBuffer = std::make_unique<IndexBuffer>(mDevice, bufferSize);
+
+    const bool bCreateResult = mIndexBuffer->CreateBuffer(mPhysicalDevice);
+    if (!bCreateResult)
     {
         return false;
     }
 
-    void* data;
-    VK_ASSERT(vkMapMemory(mDevice, stagingBufferMemory, 0, VK_WHOLE_SIZE, 0, &data));
-    memcpy(data, Vertex::Indices.data(), bufferSize);
-    vkUnmapMemory(mDevice, stagingBufferMemory);
-
-    // 스테이징 데스티네이션 버퍼 생성
-    bResult = CreateBuffer(
-        &mIndexBuffer,
-        &mIndexBufferMemory,
-        bufferSize,
-        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-    if (!bResult)
-    {
-        return false;
-    }
-
-    // 내부에서 TransferQueue가 비워질 때 까지 Wait 함.
-    CopyBuffer(stagingBuffer, mIndexBuffer, bufferSize);
-
-    vkDestroyBuffer(mDevice, stagingBuffer, nullptr);
-    vkFreeMemory(mDevice, stagingBufferMemory, nullptr);
+    mIndexBuffer->MapStagingBuffer((void*)Vertex::Indices.data(), bufferSize);
+    mIndexBuffer->TransferBuffer(mTransferCommandPool, mTransferQueue);
 
     return true;
 }
@@ -1141,21 +1081,17 @@ bool Renderer::CreateUniformBuffer()
 
     // In-Flight 방식이기에 Image마다 UniformBuffer 필요.
     mUniformBuffers.resize(mSwapChainImages.size());
-    mUniformBufferMemories.resize(mSwapChainImages.size());
 
     for (size_t i = 0; i < mSwapChainImages.size(); ++i)
     {
-        const bool bResult = CreateBuffer(
-            &mUniformBuffers[i],
-            &mUniformBufferMemories[i],
-            bufferSize,
-            VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-        if (!bResult)
+        std::unique_ptr<UniformBuffer> uniformBuffer = std::make_unique<UniformBuffer>(mDevice, bufferSize);
+        const bool bCreateResult = uniformBuffer->CreateBuffer(mPhysicalDevice);
+        if (!bCreateResult)
         {
-            RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to create uniform buffer.");
             return false;
         }
+
+        mUniformBuffers[i] = std::move(uniformBuffer);
     }
 
     return true;
@@ -1203,7 +1139,7 @@ bool Renderer::CreateDescriptorSets()
     for (size_t i = 0; i < mDescriptorSets.size(); ++i)
     {
         VkDescriptorBufferInfo bufferInfo = {};
-        bufferInfo.buffer = mUniformBuffers[i];
+        bufferInfo.buffer = mUniformBuffers[i]->GetVkBuffer();
         bufferInfo.offset = 0;
         bufferInfo.range = VK_WHOLE_SIZE;
 
@@ -1274,10 +1210,10 @@ bool Renderer::CreateCommandBuffers()
 
         vkCmdBindPipeline(mCommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, mGraphicPipeline);
 
-        VkBuffer vertexBuffers[] = { mVertexBuffer };
+        VkBuffer vertexBuffers[] = { mVertexBuffer->GetVkBuffer()};
         VkDeviceSize offsets[] = { 0 };
         vkCmdBindVertexBuffers(mCommandBuffers[i], 0, 1, vertexBuffers, offsets);
-        vkCmdBindIndexBuffer(mCommandBuffers[i], mIndexBuffer, 0, VK_INDEX_TYPE_UINT16);
+        vkCmdBindIndexBuffer(mCommandBuffers[i], mIndexBuffer->GetVkBuffer(), 0, VK_INDEX_TYPE_UINT16);
 
         assert(mDescriptorSets.size() == mCommandBuffers.size());
         vkCmdBindDescriptorSets(mCommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, mPipelineLayout, 0, 1, &mDescriptorSets[i], 0, nullptr);
@@ -1569,98 +1505,6 @@ VkExtent2D Renderer::ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabiliti
     return actualExtent;
 }
 
-uint32_t Renderer::FindPhysicalMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) const
-{
-    VkPhysicalDeviceMemoryProperties memProperties;
-    vkGetPhysicalDeviceMemoryProperties(mPhysicalDevice, &memProperties);
-
-    for (uint32_t i = 0; i < memProperties.memoryTypeCount; ++i)
-    {
-        const bool bCorrectType = (typeFilter & (1 << i)) != 0;
-        const bool bCorrectProperty = (memProperties.memoryTypes[i].propertyFlags & properties) == properties;
-        if (bCorrectType && bCorrectProperty)
-        {
-            return i;
-        }
-    }
-
-    RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to find suitable physical device memory type.");
-    return UINT32_MAX;
-}
-
-bool Renderer::CreateBuffer(VkBuffer* outBuffer, VkDeviceMemory* outBufferMemory, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties) const
-{
-    VkBufferCreateInfo bufferCreateInfo = {};
-    bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    bufferCreateInfo.size = size;
-    bufferCreateInfo.usage = usage;
-    bufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-    VkResult result = vkCreateBuffer(mDevice, &bufferCreateInfo, nullptr, outBuffer);
-    if (result != VK_SUCCESS)
-    {
-        RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to create buffer.");
-        return false;
-    }
-
-    VkMemoryRequirements memRequirements;
-    vkGetBufferMemoryRequirements(mDevice, *outBuffer, &memRequirements);
-
-    VkMemoryAllocateInfo allocInfo = {};
-    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    allocInfo.allocationSize = memRequirements.size;
-    const VkMemoryPropertyFlags memFlag = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    allocInfo.memoryTypeIndex = FindPhysicalMemoryType(memRequirements.memoryTypeBits, memFlag);
-
-    result = vkAllocateMemory(mDevice, &allocInfo, nullptr, outBufferMemory);
-    if (result != VK_SUCCESS)
-    {
-        RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to allocate buffer memory.");
-        return false;
-    }
-
-    vkBindBufferMemory(mDevice, *outBuffer, *outBufferMemory, 0);
-
-    return true;
-}
-
-void Renderer::CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size)
-{
-    VkCommandBufferAllocateInfo allocInfo = {};
-    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    allocInfo.commandPool = mTransferCommandPool;
-    allocInfo.commandBufferCount = 1;
-
-    VkCommandBuffer commandBuffer;
-    VK_ASSERT(vkAllocateCommandBuffers(mDevice, &allocInfo, &commandBuffer));
-
-    VkCommandBufferBeginInfo beginInfo = {};
-    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-    VK_ASSERT(vkBeginCommandBuffer(commandBuffer, &beginInfo));
-
-    VkBufferCopy copyRegion = {};
-    copyRegion.srcOffset = 0;
-    copyRegion.dstOffset = 0;
-    copyRegion.size = size;
-
-    vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
-
-    VK_ASSERT(vkEndCommandBuffer(commandBuffer));
-
-    VkSubmitInfo submitInfo = {};
-    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &commandBuffer;
-
-    VK_ASSERT(vkQueueSubmit(mTransferQueue, 1, &submitInfo, VK_NULL_HANDLE));
-    VK_ASSERT(vkQueueWaitIdle(mTransferQueue));
-
-    vkFreeCommandBuffers(mDevice, mTransferCommandPool, 1, &commandBuffer);
-}
-
 // temp include
 #include <chrono>
 void Renderer::UpdateUniformBuffer(uint32_t currentImage)
@@ -1677,10 +1521,9 @@ void Renderer::UpdateUniformBuffer(uint32_t currentImage)
     const float aspect = static_cast<float>(mSwapChainExtent.width) / static_cast<float>(mSwapChainExtent.height);
     ubo.ProjMatrix = glm::perspective(glm::radians(45.f), aspect, 0.1f, 100.f);
 
-    void* data;
-    vkMapMemory(mDevice, mUniformBufferMemories[currentImage], 0, sizeof(ubo), 0, &data);
-    memcpy(data, &ubo, sizeof(ubo));
-    vkUnmapMemory(mDevice, mUniformBufferMemories[currentImage]);
+    UniformBuffer* CurrentBuffer = mUniformBuffers[currentImage].get();
+    CurrentBuffer->MapStagingBuffer(&ubo, sizeof(ubo));
+    CurrentBuffer->TransferBuffer(mTransferCommandPool, mTransferQueue);
 }
 
 VKAPI_ATTR VkBool32 VKAPI_CALL Renderer::OnVkDebugLog(

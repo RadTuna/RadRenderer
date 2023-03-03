@@ -9,6 +9,9 @@
 #include "Core/Logger.h"
 
 
+namespace VkHelper
+{
+
 VkResult CreateDebugUtilsMessengerEXT(
     VkInstance instance,
     const VkDebugUtilsMessengerCreateInfoEXT* createInfo,
@@ -59,3 +62,23 @@ bool TryReadShaderFile(std::vector<uint8_t>* outBinary, const std::string& fileP
     return true;
 }
 
+uint32_t VkHelper::FindPhysicalMemoryType(VkPhysicalDevice physicalDevice, uint32_t typeFilter, VkMemoryPropertyFlags properties)
+{
+    VkPhysicalDeviceMemoryProperties memProperties;
+    vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProperties);
+
+    for (uint32_t i = 0; i < memProperties.memoryTypeCount; ++i)
+    {
+        const bool bCorrectType = (typeFilter & (1 << i)) != 0;
+        const bool bCorrectProperty = (memProperties.memoryTypes[i].propertyFlags & properties) == properties;
+        if (bCorrectType && bCorrectProperty)
+        {
+            return i;
+        }
+    }
+
+    RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to find suitable physical device memory type.");
+    return UINT32_MAX;
+}
+
+}

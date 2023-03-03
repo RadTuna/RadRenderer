@@ -17,7 +17,7 @@ set(VCPKG_MANIFEST_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 project(RadRenderer)
 
 # set visual studio settings
-VS_STARTUP_PROJECT(${PROJECT_NAME})
+set(VS_STARTUP_PROJECT ${PROJECT_NAME})
 
 # set base variables
 set(SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/Source)

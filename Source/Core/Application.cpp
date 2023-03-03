@@ -93,7 +93,6 @@ void Application::InitializeWindow()
     // pre setting for create window
     glfwInit();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    //glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
     // create glfw window
     mWindow = glfwCreateWindow(

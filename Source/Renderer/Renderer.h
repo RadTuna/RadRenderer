@@ -5,11 +5,16 @@
 
 // External Include
 #include <optional>
+#include <memory>
 #include <vulkan/vulkan.h>
 
 // Internal Include
 #include "Core/Module.h"
 
+
+class VertexBuffer;
+class IndexBuffer;
+class UniformBuffer;
 
 struct QueueFamilyIndices
 {
@@ -80,10 +85,6 @@ private:
     VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& avaliablePresentModes) const;
     VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilites) const;
 
-    uint32_t FindPhysicalMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) const;
-    bool CreateBuffer(VkBuffer* outBuffer, VkDeviceMemory* outBufferMemory, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties) const;
-    void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
-
     // temp transform function
     void UpdateUniformBuffer(uint32_t currentImage);
 
@@ -113,13 +114,9 @@ private:
     VkCommandPool mTransferCommandPool;
     VkDescriptorPool mDescriptorPool;
 
-    VkBuffer mVertexBuffer;
-    VkDeviceMemory mVertexBufferMemory;
-    VkBuffer mIndexBuffer;
-    VkDeviceMemory mIndexBufferMemory;
-
-    std::vector<VkBuffer> mUniformBuffers;
-    std::vector<VkDeviceMemory> mUniformBufferMemories;
+    std::unique_ptr<VertexBuffer> mVertexBuffer;
+    std::unique_ptr<IndexBuffer> mIndexBuffer;
+    std::vector<std::unique_ptr<UniformBuffer>> mUniformBuffers;
 
     std::vector<VkSemaphore> mImageAvailableSemaphores;
     std::vector<VkSemaphore> mRenderFinishedSemaphores;

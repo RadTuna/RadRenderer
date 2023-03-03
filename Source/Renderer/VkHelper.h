@@ -20,16 +20,23 @@
 
 // Begin functions
 
+namespace VkHelper
+{
+
 VkResult CreateDebugUtilsMessengerEXT(
     VkInstance instance,
-    const VkDebugUtilsMessengerCreateInfoEXT * createInfo,
-    const VkAllocationCallbacks * allocator, VkDebugUtilsMessengerEXT * debugMessenger);
+    const VkDebugUtilsMessengerCreateInfoEXT* createInfo,
+    const VkAllocationCallbacks* allocator, VkDebugUtilsMessengerEXT* debugMessenger);
 
 void DestroyDebugUtilsMessengerEXT(
     VkInstance instance,
     VkDebugUtilsMessengerEXT debugMessenger,
-    const VkAllocationCallbacks * allocator);
+    const VkAllocationCallbacks* allocator);
 
-bool TryReadShaderFile(std::vector<uint8_t>*outBinary, const std::string& filePath);
+bool TryReadShaderFile(std::vector<uint8_t>* outBinary, const std::string& filePath);
+
+uint32_t FindPhysicalMemoryType(VkPhysicalDevice physicalDevice, uint32_t typeFilter, VkMemoryPropertyFlags properties);
+
+}
 
 // End functions
