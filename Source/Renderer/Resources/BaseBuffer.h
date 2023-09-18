@@ -4,15 +4,17 @@
 #include <vulkan/vulkan.h>
 
 
+class RenderDevice;
+
 class BaseBuffer
 {
 public:
-    BaseBuffer(VkDevice inDevice, uint64_t inBufferSize);
+    BaseBuffer(RenderDevice* inRenderDevice, uint64_t inBufferSize);
     virtual ~BaseBuffer();
 
     virtual VkBufferUsageFlagBits GetBufferUsage() const = 0;
 
-    bool CreateBuffer(VkPhysicalDevice physicalDevice);
+    bool CreateBuffer();
     void DestroyBuffer();
 
     void MapStagingBuffer(void* inData, uint64_t size);
@@ -21,10 +23,10 @@ public:
     inline VkBuffer GetVkBuffer() const { return mBuffer; }
 
 private:
-    bool CreateBufferInternal(VkPhysicalDevice physicalDevice, VkBuffer* buffer, VkDeviceMemory* bufferMemory, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties);
+    bool CreateBufferInternal(VkBuffer* buffer, VkDeviceMemory* bufferMemory, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties);
 
 protected:
-    VkDevice mDevice;
+    RenderDevice* mRenderDevice;
 
     VkBuffer mBuffer;
     VkDeviceMemory mBufferMemory;

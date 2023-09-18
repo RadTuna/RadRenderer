@@ -10,8 +10,8 @@
 class IndexBuffer final : public BaseBuffer
 {
 public:
-    IndexBuffer(VkDevice inDevice, uint64_t inBufferSize)
-        : BaseBuffer(inDevice, inBufferSize)
+    IndexBuffer(RenderDevice* inRenderDevice, uint64_t inBufferSize)
+        : BaseBuffer(inRenderDevice, inBufferSize)
     {}
     virtual ~IndexBuffer() = default;
 

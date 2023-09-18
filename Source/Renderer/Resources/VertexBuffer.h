@@ -10,8 +10,8 @@
 class VertexBuffer final : public BaseBuffer
 {
 public:
-    VertexBuffer(VkDevice inDevice, uint64_t inBufferSize)
-        : BaseBuffer(inDevice, inBufferSize)
+    VertexBuffer(RenderDevice* inRenderDevice, uint64_t inBufferSize)
+        : BaseBuffer(inRenderDevice, inBufferSize)
     {}
     virtual ~VertexBuffer() = default;
 

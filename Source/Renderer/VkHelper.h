@@ -7,7 +7,7 @@
 #include <vulkan/vulkan.h>
 
 
-// Begin macros
+#pragma region Macros
 
 #if defined NDEBUG
 #define VK_ASSERT(Return)
@@ -15,10 +15,10 @@
 #define VK_ASSERT(Return) if ((Return) != VK_SUCCESS) { assert(false); }
 #endif
 
-// End macros
+#pragma endregion
 
 
-// Begin functions
+#pragma region Functions
 
 namespace VkHelper
 {
@@ -35,8 +35,6 @@ void DestroyDebugUtilsMessengerEXT(
 
 bool TryReadShaderFile(std::vector<uint8_t>* outBinary, const std::string& filePath);
 
-uint32_t FindPhysicalMemoryType(VkPhysicalDevice physicalDevice, uint32_t typeFilter, VkMemoryPropertyFlags properties);
-
 }
 
-// End functions
+#pragma endregion

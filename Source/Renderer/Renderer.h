@@ -10,29 +10,12 @@
 
 // Internal Include
 #include "Core/Module.h"
+#include "RenderDevice.h"
 
 
 class VertexBuffer;
 class IndexBuffer;
 class UniformBuffer;
-
-struct QueueFamilyIndices
-{
-    std::optional<uint32_t> GraphicFamily;
-    std::optional<uint32_t> PresentFamily;
-    std::optional<uint32_t> TransferFamily;
-
-    static bool IsValidQueueFamilyIndices(const QueueFamilyIndices& indices);
-    static std::vector<uint32_t> GetUniqueFamilies(const QueueFamilyIndices& indices);
-
-};
-
-struct SwapChainSupportDetails
-{
-    VkSurfaceCapabilitiesKHR Capabilities;
-    std::vector<VkSurfaceFormatKHR> Formats;
-    std::vector<VkPresentModeKHR> PresentModes;
-};
 
 class Renderer final : public Module 
 {
@@ -53,11 +36,6 @@ public:
     bool CanRender() const { return mbCanRender; }
 
 private:
-    bool CreateInstance();
-    bool CreateDebugMessenger();
-    bool CreateSurface();
-    bool PickPhysicalDevice();
-    bool CreateLogicalDevice();
     bool CreateSwapChain();
     bool CreateRenderPass();
     bool CreateDescriptorSetLayout();
@@ -72,15 +50,7 @@ private:
     bool CreateCommandBuffers();
     bool CreateSyncObjects();
 
-    bool CheckValidationLayerSupport() const;
-    void GetRequiredExtensions(std::vector<const char*>* outExtensions) const;
-    void PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo) const;
-    bool IsDeviceSuitable(VkPhysicalDevice physicalDevice) const;
-    bool CheckDeviceExtensionSupport(VkPhysicalDevice physicalDevice) const;
-    QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice physicalDevice) const;
-    SwapChainSupportDetails QuerySwapCahinSupport(VkPhysicalDevice physicalDevice) const;
     bool CreateShaderModule(VkShaderModule* outShaderModule, const std::vector<uint8_t>& shaderBinary);
-
     VkSurfaceFormatKHR ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& avaliableFormats) const;
     VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& avaliablePresentModes) const;
     VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilites) const;
@@ -88,23 +58,15 @@ private:
     // temp transform function
     void UpdateUniformBuffer(uint32_t currentImage);
 
-    static VKAPI_ATTR VkBool32 VKAPI_CALL OnVkDebugLog(
-        VkDebugUtilsMessageSeverityFlagBitsEXT messageServerity,
-        VkDebugUtilsMessageTypeFlagsEXT messageType,
-        const VkDebugUtilsMessengerCallbackDataEXT* pCallBackData,
-        void* pUserData);
-
 private:
     static const uint32_t MAX_FRAME_IN_FLIGHT;
 
-    VkInstance mInstance;
-    VkDebugUtilsMessengerEXT mDebugMessenger;
-    VkPhysicalDevice mPhysicalDevice;
-    VkDevice mDevice;
+    std::vector<RenderObject*> mAllRenderObjects;
+    std::unique_ptr<RenderDevice> mRenderDevice;
+
     VkQueue mGraphicsQueue;
     VkQueue mPresentQueue;
     VkQueue mTransferQueue;
-    VkSurfaceKHR mSurface;
     VkSwapchainKHR mSwapChain;
     VkRenderPass mRenderPass;
     VkDescriptorSetLayout mDescriptorSetLayout;
@@ -124,12 +86,6 @@ private:
     std::vector<VkFence> mImageInFlightFence;
     uint32_t mCurrentFrame;
 
-    std::vector<VkExtensionProperties> mVkExtensions;
-    std::vector<const char*> mDeviceExtensions;
-
-    std::vector<VkLayerProperties> mVkLayers;
-    std::vector<const char*> mValidationLayers;
-
     std::vector<VkImage> mSwapChainImages;
     std::vector<VkImageView> mSwapChainImageViews;
     VkExtent2D mSwapChainExtent;
@@ -140,7 +96,6 @@ private:
 
     std::vector<VkDescriptorSet> mDescriptorSets;
 
-    bool mbEnableValidationLayer;
     bool mbFrameBufferResized;
     bool mbCanRender;
 

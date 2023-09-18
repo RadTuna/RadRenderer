@@ -18,8 +18,8 @@ struct alignas(16) UniformBufferObject
 class UniformBuffer final : public BaseBuffer
 {
 public:
-    UniformBuffer(VkDevice inDevice, uint64_t inBufferSize)
-        : BaseBuffer(inDevice, inBufferSize)
+    UniformBuffer(RenderDevice* inRenderDevice, uint64_t inBufferSize)
+        : BaseBuffer(inRenderDevice, inBufferSize)
     {}
     virtual ~UniformBuffer() = default;
 
