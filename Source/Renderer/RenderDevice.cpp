@@ -41,6 +41,9 @@ RenderDevice::RenderDevice()
     , mPhysicalDevice(VK_NULL_HANDLE)
     , mDevice(VK_NULL_HANDLE)
     , mSurface(VK_NULL_HANDLE)
+    , mGraphicsQueue(VK_NULL_HANDLE)
+    , mPresentQueue(VK_NULL_HANDLE)
+    , mTransferQueue(VK_NULL_HANDLE)
     , mbEnableValidationLayer(true)
 {
     // required extension
@@ -95,15 +98,30 @@ bool RenderDevice::Create(RenderDevice* renderDevice)
 
 void RenderDevice::Destroy()
 {
-    vkDestroyDevice(mDevice, nullptr);
-    vkDestroySurfaceKHR(mInstance, mSurface, nullptr);
+    if (mDevice != VK_NULL_HANDLE)
+    {
+        vkDestroyDevice(mDevice, nullptr);
+        mDevice = VK_NULL_HANDLE;
+    }
+
+    if (mSurface != VK_NULL_HANDLE)
+    {
+        vkDestroySurfaceKHR(mInstance, mSurface, nullptr);
+        mSurface = VK_NULL_HANDLE;
+    }
 #if !defined NDEBUG
-    if (mbEnableValidationLayer)
+    if (mbEnableValidationLayer && mDebugMessenger != VK_NULL_HANDLE)
     {
         VkHelper::DestroyDebugUtilsMessengerEXT(mInstance, mDebugMessenger, nullptr);
+        mDebugMessenger = VK_NULL_HANDLE;
     }
 #endif
-    vkDestroyInstance(mInstance, nullptr);
+
+    if (mInstance != VK_NULL_HANDLE)
+    {
+        vkDestroyInstance(mInstance, nullptr);
+        mInstance = VK_NULL_HANDLE;
+    }
 }
 
 QueueFamilyIndices RenderDevice::FindQueueFamilies() const

@@ -129,7 +129,7 @@ void BaseBuffer::MapStagingBuffer(void* inData, uint64_t size)
     vkUnmapMemory(*mRenderDevice, mStagingBufferMemory);
 }
 
-void BaseBuffer::TransferBuffer(VkCommandPool commandPool, VkQueue targetQueue)
+void BaseBuffer::TransferBuffer(VkCommandPool commandPool)
 {
     VkCommandBufferAllocateInfo allocInfo = {};
     allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -160,8 +160,8 @@ void BaseBuffer::TransferBuffer(VkCommandPool commandPool, VkQueue targetQueue)
     submitInfo.commandBufferCount = 1;
     submitInfo.pCommandBuffers = &commandBuffer;
 
-    VK_ASSERT(vkQueueSubmit(targetQueue, 1, &submitInfo, VK_NULL_HANDLE));
-    VK_ASSERT(vkQueueWaitIdle(targetQueue));
+    VK_ASSERT(vkQueueSubmit(mRenderDevice->GetTransferQueue(), 1, &submitInfo, VK_NULL_HANDLE));
+    VK_ASSERT(vkQueueWaitIdle(mRenderDevice->GetTransferQueue()));
     
     vkFreeCommandBuffers(*mRenderDevice, commandPool, 1, &commandBuffer);
 }

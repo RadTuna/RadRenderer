@@ -30,7 +30,6 @@ Renderer::Renderer(class Application* inApp)
     , mGraphicsQueue(VK_NULL_HANDLE)
     , mPresentQueue(VK_NULL_HANDLE)
     , mTransferQueue(VK_NULL_HANDLE)
-    , mSwapChain(VK_NULL_HANDLE)
     , mRenderPass(VK_NULL_HANDLE)
     , mPipelineLayout(VK_NULL_HANDLE)
     , mGraphicPipeline(VK_NULL_HANDLE)
@@ -38,15 +37,18 @@ Renderer::Renderer(class Application* inApp)
     , mTransferCommandPool(VK_NULL_HANDLE)
     , mDescriptorPool(VK_NULL_HANDLE)
     , mCurrentFrame(0)
-    , mSwapChainExtent{ 0, }
-    , mSwapChainImageFormat(VK_FORMAT_UNDEFINED)
     , mbFrameBufferResized(false)
     , mbCanRender(true)
 {
-    mRenderDevice = std::make_unique<RenderDevice>();
+    std::unique_ptr<RenderDevice> renderDevice = std::make_unique<RenderDevice>();
+    std::unique_ptr<RenderSwapChain> swapChain = std::make_unique<RenderSwapChain>();
+
+    mRenderDevice = renderDevice.get();
+    mSwapChain = swapChain.get();
 
     // register all render objects;
-    mAllRenderObjects.push_back(mRenderDevice.get());
+    mAllRenderObjects.push_back(std::move(renderDevice));
+    mAllRenderObjects.push_back(std::move(swapChain));
 }
 
 Renderer::~Renderer()
@@ -69,13 +71,20 @@ bool Renderer::Initialize()
     mPresentQueue = mRenderDevice->GetPresentQueue();
     mTransferQueue = mRenderDevice->GetTransferQueue();
 
-    bResult = CreateSwapChain();
+    bResult = mSwapChain->Create(mRenderDevice);
     if (!bResult)
     {
         return bResult;
     }
 
     bResult = CreateRenderPass();
+    if (!bResult)
+    {
+        return bResult;
+    }
+
+    // 렌더 패스가 있어야 프레임 버퍼 생성 가능
+    bResult = mSwapChain->CreateFrameBuffers(mRenderPass);
     if (!bResult)
     {
         return bResult;
@@ -88,12 +97,6 @@ bool Renderer::Initialize()
     }
 
     bResult = CreateGraphicsPipeline();
-    if (!bResult)
-    {
-        return bResult;
-    }
-
-    bResult = CreateFrameBuffers();
     if (!bResult)
     {
         return bResult;
@@ -161,7 +164,7 @@ void Renderer::Loop()
     VK_ASSERT(vkWaitForFences(*mRenderDevice, 1, &mInFlightFence[mCurrentFrame], VK_TRUE, UINT64_MAX));
 
     uint32_t imageIndex;
-    VkResult result = vkAcquireNextImageKHR(*mRenderDevice, mSwapChain, UINT64_MAX, mImageAvailableSemaphores[mCurrentFrame], VK_NULL_HANDLE, &imageIndex);
+    VkResult result = vkAcquireNextImageKHR(*mRenderDevice, *mSwapChain, UINT64_MAX, mImageAvailableSemaphores[mCurrentFrame], VK_NULL_HANDLE, &imageIndex);
     if (result == VK_ERROR_OUT_OF_DATE_KHR)
     {
         RecreateDependSwapChainObjects();
@@ -216,7 +219,7 @@ void Renderer::Loop()
     presentInfo.waitSemaphoreCount = static_cast<uint32_t>(ArraySize(waitSemaphores));
     presentInfo.pWaitSemaphores = signalSemaphores;
 
-    VkSwapchainKHR swapChains[] = { mSwapChain };
+    VkSwapchainKHR swapChains[] = { *mSwapChain };
     presentInfo.swapchainCount = static_cast<uint32_t>(ArraySize(swapChains));
     presentInfo.pSwapchains = swapChains;
     presentInfo.pImageIndices = &imageIndex;
@@ -256,7 +259,10 @@ void Renderer::Deinitialize()
 
     DestroyDependSwapChainObjects();
 
-    mRenderDevice = nullptr;
+    for (int32_t idx = 0; idx < mAllRenderObjects.size(); ++idx)
+    {
+        mAllRenderObjects[idx] = nullptr;
+    }
 
     RAD_LOG(ELogType::Renderer, ELogClass::Log, "Complete renderer module deinitialization.");
 }
@@ -276,7 +282,7 @@ bool Renderer::RecreateDependSwapChainObjects()
     vkFreeCommandBuffers(*mRenderDevice, mGraphicsCommandPool, static_cast<uint32_t>(mCommandBuffers.size()), mCommandBuffers.data());
     DestroyDependSwapChainObjects();
 
-    bool bResult = CreateSwapChain();
+    bool bResult = mSwapChain->Create(mRenderDevice);
     if (!bResult)
     {
         return bResult;
@@ -288,13 +294,14 @@ bool Renderer::RecreateDependSwapChainObjects()
         return bResult;
     }
 
-    bResult = CreateGraphicsPipeline();
+    // 프레임 버퍼는 렌더 패스가 있어야 생성 가능
+    bResult = mSwapChain->CreateFrameBuffers(mRenderPass);
     if (!bResult)
     {
         return bResult;
     }
 
-    bResult = CreateFrameBuffers();
+    bResult = CreateGraphicsPipeline();
     if (!bResult)
     {
         return bResult;
@@ -332,118 +339,23 @@ bool Renderer::RecreateDependSwapChainObjects()
 
 void Renderer::DestroyDependSwapChainObjects()
 {
-    for (VkFramebuffer frameBuffer : mSwapChainFrameBuffers)
-    {
-        vkDestroyFramebuffer(*mRenderDevice, frameBuffer, nullptr);
-    }
-
     for (size_t i = 0; i < mUniformBuffers.size(); ++i)
     {
         mUniformBuffers[i] = nullptr;
     }
 
     vkDestroyDescriptorPool(*mRenderDevice, mDescriptorPool, nullptr);
-
     vkDestroyPipeline(*mRenderDevice, mGraphicPipeline, nullptr);
     vkDestroyPipelineLayout(*mRenderDevice, mPipelineLayout, nullptr);
     vkDestroyRenderPass(*mRenderDevice, mRenderPass, nullptr);
 
-    for (VkImageView imageView : mSwapChainImageViews)
-    {
-        vkDestroyImageView(*mRenderDevice, imageView, nullptr);
-    }
-
-    vkDestroySwapchainKHR(*mRenderDevice, mSwapChain, nullptr);
-}
-
-bool Renderer::CreateSwapChain()
-{
-    const SwapChainSupportDetails details = mRenderDevice->QuerySwapCahinSupport();
-    const VkSurfaceFormatKHR surfaceFormat = ChooseSwapSurfaceFormat(details.Formats);
-    const VkPresentModeKHR presentMode = ChooseSwapPresentMode(details.PresentModes);
-    const VkExtent2D extent = ChooseSwapExtent(details.Capabilities);
-
-    uint32_t imageCount = details.Capabilities.minImageCount + 1;
-    if (details.Capabilities.maxImageCount > 0 && details.Capabilities.maxImageCount < imageCount)
-    {
-        imageCount = details.Capabilities.maxImageCount;
-    }
-
-    VkSwapchainCreateInfoKHR swapChainCreateInfo = {};
-    swapChainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-    swapChainCreateInfo.surface = mRenderDevice->GetSurface();
-    swapChainCreateInfo.minImageCount = imageCount;
-    swapChainCreateInfo.imageFormat = surfaceFormat.format;
-    swapChainCreateInfo.imageColorSpace = surfaceFormat.colorSpace;
-    swapChainCreateInfo.imageExtent = extent;
-    swapChainCreateInfo.imageArrayLayers = 1;
-    swapChainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-
-    const QueueFamilyIndices indices = mRenderDevice->FindQueueFamilies();
-    assert(QueueFamilyIndices::IsValidQueueFamilyIndices(indices) == true);
-    std::vector<uint32_t> uniqueQueueFamilies = QueueFamilyIndices::GetUniqueFamilies(indices);
-
-    // Graphics queue와 Transfer queue가 다르도록 강제하기에 CONCURRENT 모드 사용.
-    // CONCURRENT 모드 사용 시에는 QueueFamilyIndex가 Unique 해야함.
-    swapChainCreateInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
-    swapChainCreateInfo.queueFamilyIndexCount = static_cast<uint32_t>(uniqueQueueFamilies.size());
-    swapChainCreateInfo.pQueueFamilyIndices = uniqueQueueFamilies.data();
-
-    swapChainCreateInfo.preTransform = details.Capabilities.currentTransform;
-    swapChainCreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-    swapChainCreateInfo.presentMode = presentMode;
-    swapChainCreateInfo.clipped = VK_TRUE;
-    swapChainCreateInfo.oldSwapchain = VK_NULL_HANDLE;
-
-    VkResult result = vkCreateSwapchainKHR(*mRenderDevice, &swapChainCreateInfo, nullptr, &mSwapChain);
-    if (result != VK_SUCCESS)
-    {
-        RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to create Vulkan swap chain.");
-        return false;
-    }
-
-    mSwapChainExtent = extent;
-    mSwapChainImageFormat = surfaceFormat.format;
-
-    uint32_t swapImageCount = 0;
-    VK_ASSERT(vkGetSwapchainImagesKHR(*mRenderDevice, mSwapChain, &swapImageCount, nullptr));
-    mSwapChainImages.resize(swapImageCount);
-    VK_ASSERT(vkGetSwapchainImagesKHR(*mRenderDevice, mSwapChain, &swapImageCount, mSwapChainImages.data()));
-
-    // Begin create swap chain image views
-    mSwapChainImageViews.resize(mSwapChainImages.size());
-    for (size_t i = 0; i < mSwapChainImages.size(); ++i)
-    {
-        VkImageViewCreateInfo imageViewCreateInfo = {};
-        imageViewCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        imageViewCreateInfo.image = mSwapChainImages[i];
-        imageViewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        imageViewCreateInfo.format = mSwapChainImageFormat;
-        imageViewCreateInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-        imageViewCreateInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-        imageViewCreateInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-        imageViewCreateInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-        imageViewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        imageViewCreateInfo.subresourceRange.baseMipLevel = 0;
-        imageViewCreateInfo.subresourceRange.levelCount = 1;
-        imageViewCreateInfo.subresourceRange.baseArrayLayer = 0;
-        imageViewCreateInfo.subresourceRange.layerCount = 1;
-
-        result = vkCreateImageView(*mRenderDevice, &imageViewCreateInfo, nullptr, &mSwapChainImageViews[i]);
-        if (result != VK_SUCCESS)
-        {
-            RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to create swap chain image view.");
-            return false;
-        }
-    }
-
-    return true;
+    mSwapChain->Destroy();
 }
 
 bool Renderer::CreateRenderPass()
 {
     VkAttachmentDescription colorAttachment = {};
-    colorAttachment.format = mSwapChainImageFormat;
+    colorAttachment.format = mSwapChain->GetImageFormat();
     colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
     colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -560,17 +472,19 @@ bool Renderer::CreateGraphicsPipeline()
         // End inptu assembly state
 
         // Begin viewport and scissor
+        const VkExtent2D& swapChainExtent = mSwapChain->GetExtent();
+
         VkViewport viewport = {};
         viewport.x = 0.f;
-        viewport.y = static_cast<float>(mSwapChainExtent.height);
-        viewport.width = static_cast<float>(mSwapChainExtent.width);
-        viewport.height = -static_cast<float>(mSwapChainExtent.height);
+        viewport.y = static_cast<float>(swapChainExtent.height);
+        viewport.width = static_cast<float>(swapChainExtent.width);
+        viewport.height = -static_cast<float>(swapChainExtent.height);
         viewport.minDepth = 0.f;
         viewport.maxDepth = 1.f;
 
         VkRect2D scissor = {};
         scissor.offset = { 0, 0 };
-        scissor.extent = mSwapChainExtent;
+        scissor.extent = swapChainExtent;
 
         VkPipelineViewportStateCreateInfo viewportCreateInfo = {};
         viewportCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -696,36 +610,6 @@ EXIT_SHADER_VERT:
     return bResult;
 }
 
-bool Renderer::CreateFrameBuffers()
-{
-    mSwapChainFrameBuffers.resize(mSwapChainImageViews.size());
-
-    for (size_t i = 0; i < mSwapChainImageViews.size(); ++i)
-    {
-        VkImageView attachments[] = {
-            mSwapChainImageViews[i]
-        };
-
-        VkFramebufferCreateInfo frameBufferCreateInfo = {};
-        frameBufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-        frameBufferCreateInfo.renderPass = mRenderPass;
-        frameBufferCreateInfo.attachmentCount = static_cast<uint32_t>(ArraySize(attachments));
-        frameBufferCreateInfo.pAttachments = attachments;
-        frameBufferCreateInfo.width = mSwapChainExtent.width;
-        frameBufferCreateInfo.height = mSwapChainExtent.height;
-        frameBufferCreateInfo.layers = 1;
-
-        const VkResult result = vkCreateFramebuffer(*mRenderDevice, &frameBufferCreateInfo, nullptr, &mSwapChainFrameBuffers[i]);
-        if (result != VK_SUCCESS)
-        {
-            RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to create frame buffer.");
-            return false;
-        }
-    }
-
-    return true;
-}
-
 bool Renderer::CreateDescriptorSetLayout()
 {
     VkDescriptorSetLayoutBinding uboLayoutBinding = {};
@@ -782,7 +666,7 @@ bool Renderer::CreateVertexBuffer()
 {
     const VkDeviceSize bufferSize = sizeof(Vertex) * Vertex::Vertices.size();
 
-    mVertexBuffer = std::make_unique<VertexBuffer>(mRenderDevice.get(), bufferSize);
+    mVertexBuffer = std::make_unique<VertexBuffer>(mRenderDevice, bufferSize);
     const bool bCreateResult = mVertexBuffer->CreateBuffer();
     if (!bCreateResult)
     {
@@ -790,7 +674,7 @@ bool Renderer::CreateVertexBuffer()
     }
 
     mVertexBuffer->MapStagingBuffer((void*)Vertex::Vertices.data(), bufferSize);
-    mVertexBuffer->TransferBuffer(mTransferCommandPool, mTransferQueue);
+    mVertexBuffer->TransferBuffer(mTransferCommandPool);
 
     return true;
 }
@@ -799,7 +683,7 @@ bool Renderer::CreateIndexBuffer()
 {
     const VkDeviceSize bufferSize = sizeof(uint16_t) * Vertex::Indices.size();
 
-    mIndexBuffer = std::make_unique<IndexBuffer>(mRenderDevice.get(), bufferSize);
+    mIndexBuffer = std::make_unique<IndexBuffer>(mRenderDevice, bufferSize);
 
     const bool bCreateResult = mIndexBuffer->CreateBuffer();
     if (!bCreateResult)
@@ -808,7 +692,7 @@ bool Renderer::CreateIndexBuffer()
     }
 
     mIndexBuffer->MapStagingBuffer((void*)Vertex::Indices.data(), bufferSize);
-    mIndexBuffer->TransferBuffer(mTransferCommandPool, mTransferQueue);
+    mIndexBuffer->TransferBuffer(mTransferCommandPool);
 
     return true;
 }
@@ -818,11 +702,11 @@ bool Renderer::CreateUniformBuffer()
     VkDeviceSize bufferSize = sizeof(UniformBufferObject);
 
     // In-Flight 방식이기에 Image마다 UniformBuffer 필요.
-    mUniformBuffers.resize(mSwapChainImages.size());
-
-    for (size_t i = 0; i < mSwapChainImages.size(); ++i)
+    const size_t swapChainImageCount = mSwapChain->GetImageCount();
+    mUniformBuffers.resize(swapChainImageCount);
+    for (size_t i = 0; i < swapChainImageCount; ++i)
     {
-        std::unique_ptr<UniformBuffer> uniformBuffer = std::make_unique<UniformBuffer>(mRenderDevice.get(), bufferSize);
+        std::unique_ptr<UniformBuffer> uniformBuffer = std::make_unique<UniformBuffer>(mRenderDevice, bufferSize);
         const bool bCreateResult = uniformBuffer->CreateBuffer();
         if (!bCreateResult)
         {
@@ -837,15 +721,17 @@ bool Renderer::CreateUniformBuffer()
 
 bool Renderer::CreateDescriptorPool()
 {
+    const size_t swapChainImageCount = mSwapChain->GetImageCount();
+
     VkDescriptorPoolSize poolSize = {};
     poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    poolSize.descriptorCount = static_cast<uint32_t>(mSwapChainImages.size());
+    poolSize.descriptorCount = static_cast<uint32_t>(swapChainImageCount);
 
     VkDescriptorPoolCreateInfo poolCreateInfo = {};
     poolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     poolCreateInfo.poolSizeCount = 1;
     poolCreateInfo.pPoolSizes = &poolSize;
-    poolCreateInfo.maxSets = static_cast<uint32_t>(mSwapChainImages.size());
+    poolCreateInfo.maxSets = static_cast<uint32_t>(swapChainImageCount);
 
     const VkResult result = vkCreateDescriptorPool(*mRenderDevice, &poolCreateInfo, nullptr, &mDescriptorPool);
     if (result != VK_SUCCESS)
@@ -858,7 +744,8 @@ bool Renderer::CreateDescriptorPool()
 
 bool Renderer::CreateDescriptorSets()
 {
-    std::vector<VkDescriptorSetLayout> layouts(mSwapChainImages.size(), mDescriptorSetLayout);
+    const size_t swapChainImageCount = mSwapChain->GetImageCount();
+    std::vector<VkDescriptorSetLayout> layouts(swapChainImageCount, mDescriptorSetLayout);
 
     VkDescriptorSetAllocateInfo allocInfo = {};
     allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -900,7 +787,8 @@ bool Renderer::CreateDescriptorSets()
 
 bool Renderer::CreateCommandBuffers()
 {
-    mCommandBuffers.resize(mSwapChainFrameBuffers.size());
+    const size_t swapChainImageCount = mSwapChain->GetImageCount();
+    mCommandBuffers.resize(swapChainImageCount);
 
     VkCommandBufferAllocateInfo allocInfo = {};
     allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -929,13 +817,13 @@ bool Renderer::CreateCommandBuffers()
             return false;
         }
 
-        assert(mCommandBuffers.size() == mSwapChainFrameBuffers.size());
+        assert(mCommandBuffers.size() == swapChainImageCount);
         VkRenderPassBeginInfo renderPassBeginInfo = {};
         renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
         renderPassBeginInfo.renderPass = mRenderPass;
-        renderPassBeginInfo.framebuffer = mSwapChainFrameBuffers[i];
+        renderPassBeginInfo.framebuffer = mSwapChain->GetFrameBuffer(i);
         renderPassBeginInfo.renderArea.offset = { 0, 0 };
-        renderPassBeginInfo.renderArea.extent = mSwapChainExtent;
+        renderPassBeginInfo.renderArea.extent = mSwapChain->GetExtent();
 
         VkClearValue clearColor = {};
         clearColor.color = { 0.f, 0.f, 0.f, 1.f };
@@ -974,10 +862,11 @@ bool Renderer::CreateCommandBuffers()
 
 bool Renderer::CreateSyncObjects()
 {
+    const size_t swapChainImageCount = mSwapChain->GetImageCount();
     mImageAvailableSemaphores.resize(MAX_FRAME_IN_FLIGHT);
     mRenderFinishedSemaphores.resize(MAX_FRAME_IN_FLIGHT);
     mInFlightFence.resize(MAX_FRAME_IN_FLIGHT);
-    mImageInFlightFence.resize(mSwapChainImages.size(), VK_NULL_HANDLE);
+    mImageInFlightFence.resize(swapChainImageCount, VK_NULL_HANDLE);
 
     VkSemaphoreCreateInfo semaphoreCreateInfo = {};
     semaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -1029,53 +918,6 @@ bool Renderer::CreateShaderModule(VkShaderModule* outShaderModule, const std::ve
     return true;
 }
 
-VkSurfaceFormatKHR Renderer::ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& avaliableFormats) const
-{
-    for (const VkSurfaceFormatKHR avaliableFormat : avaliableFormats)
-    {
-        if (avaliableFormat.format == VK_FORMAT_B8G8R8A8_SRGB
-            && avaliableFormat.colorSpace == VK_COLORSPACE_SRGB_NONLINEAR_KHR)
-        {
-            return avaliableFormat;
-        }
-    }
-
-    return avaliableFormats.front();
-}
-
-VkPresentModeKHR Renderer::ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& avaliablePresentModes) const
-{
-    for (const VkPresentModeKHR& avaliablePresentMode : avaliablePresentModes)
-    {
-        if (avaliablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR)
-        {
-            return avaliablePresentMode;
-        }
-    }
-
-    return VK_PRESENT_MODE_FIFO_KHR; // Guaranteed to be always avaliable.
-}
-
-VkExtent2D Renderer::ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities) const
-{
-    VkExtent2D actualExtent = capabilities.currentExtent;
-    if (capabilities.currentExtent.width == UINT32_MAX)
-    {
-        int width = 0;
-        int height = 0;
-
-        GLFWwindow* windowObject = mApp->GetWindowObject();
-        glfwGetFramebufferSize(windowObject, &width, &height);
-
-        actualExtent.width = static_cast<uint32_t>(width);
-        actualExtent.height = static_cast<uint32_t>(height);
-        actualExtent.width = std::clamp(actualExtent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
-        actualExtent.height = std::clamp(actualExtent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
-    }
-
-    return actualExtent;
-}
-
 // temp include
 #include <chrono>
 void Renderer::UpdateUniformBuffer(uint32_t currentImage)
@@ -1089,10 +931,11 @@ void Renderer::UpdateUniformBuffer(uint32_t currentImage)
     ubo.ModelMatrix = glm::rotate(glm::mat4(1.f), time * glm::radians(90.f), glm::vec3(0.f, 0.f, 1.f));
     ubo.ViewMatrix = glm::lookAt(glm::vec3(2.f, 2.f, 2.f), glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, 0.f, 1.f));
 
-    const float aspect = static_cast<float>(mSwapChainExtent.width) / static_cast<float>(mSwapChainExtent.height);
+    const VkExtent2D& swapChainExtent = mSwapChain->GetExtent();
+    const float aspect = static_cast<float>(swapChainExtent.width) / static_cast<float>(swapChainExtent.height);
     ubo.ProjMatrix = glm::perspective(glm::radians(45.f), aspect, 0.1f, 100.f);
 
     UniformBuffer* CurrentBuffer = mUniformBuffers[currentImage].get();
     CurrentBuffer->MapStagingBuffer(&ubo, sizeof(ubo));
-    CurrentBuffer->TransferBuffer(mTransferCommandPool, mTransferQueue);
+    CurrentBuffer->TransferBuffer(mTransferCommandPool);
 }

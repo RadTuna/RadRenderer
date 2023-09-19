@@ -10,7 +10,8 @@
 
 // Internal Include
 #include "Core/Module.h"
-#include "RenderDevice.h"
+#include "Renderer/RenderDevice.h"
+#include "Renderer/SwapChain.h"
 
 
 class VertexBuffer;
@@ -36,11 +37,9 @@ public:
     bool CanRender() const { return mbCanRender; }
 
 private:
-    bool CreateSwapChain();
     bool CreateRenderPass();
     bool CreateDescriptorSetLayout();
     bool CreateGraphicsPipeline();
-    bool CreateFrameBuffers();
     bool CreateCommandPools();
     bool CreateVertexBuffer();
     bool CreateIndexBuffer();
@@ -51,9 +50,6 @@ private:
     bool CreateSyncObjects();
 
     bool CreateShaderModule(VkShaderModule* outShaderModule, const std::vector<uint8_t>& shaderBinary);
-    VkSurfaceFormatKHR ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& avaliableFormats) const;
-    VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& avaliablePresentModes) const;
-    VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilites) const;
 
     // temp transform function
     void UpdateUniformBuffer(uint32_t currentImage);
@@ -61,13 +57,13 @@ private:
 private:
     static const uint32_t MAX_FRAME_IN_FLIGHT;
 
-    std::vector<RenderObject*> mAllRenderObjects;
-    std::unique_ptr<RenderDevice> mRenderDevice;
+    std::vector<std::unique_ptr<RenderObject>> mAllRenderObjects;
+    RenderDevice* mRenderDevice;
+    RenderSwapChain* mSwapChain;
 
     VkQueue mGraphicsQueue;
     VkQueue mPresentQueue;
     VkQueue mTransferQueue;
-    VkSwapchainKHR mSwapChain;
     VkRenderPass mRenderPass;
     VkDescriptorSetLayout mDescriptorSetLayout;
     VkPipelineLayout mPipelineLayout;
@@ -86,16 +82,8 @@ private:
     std::vector<VkFence> mImageInFlightFence;
     uint32_t mCurrentFrame;
 
-    std::vector<VkImage> mSwapChainImages;
-    std::vector<VkImageView> mSwapChainImageViews;
-    VkExtent2D mSwapChainExtent;
-    VkFormat mSwapChainImageFormat;
-
-    std::vector<VkFramebuffer> mSwapChainFrameBuffers;
     std::vector<VkCommandBuffer> mCommandBuffers;
-
     std::vector<VkDescriptorSet> mDescriptorSets;
-
     bool mbFrameBufferResized;
     bool mbCanRender;
 

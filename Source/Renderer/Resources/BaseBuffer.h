@@ -18,7 +18,7 @@ public:
     void DestroyBuffer();
 
     void MapStagingBuffer(void* inData, uint64_t size);
-    void TransferBuffer(VkCommandPool commandPool, VkQueue targetQueue);
+    void TransferBuffer(VkCommandPool commandPool);
 
     inline VkBuffer GetVkBuffer() const { return mBuffer; }
 
