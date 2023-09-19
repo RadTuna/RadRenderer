@@ -5,10 +5,10 @@
   "version": "0.0.1",
   "supports": "windows & x64",
   "dependencies": [
-    "assimp",
-    "imgui",
-    "glm",
-    "glfw3",
-    "sail"
+    { "name": "assimp" },
+    { "name": "imgui", "features": [ "glfw-binding", "vulkan-binding" ] },
+    { "name": "glm" },
+    { "name": "glfw3" },
+    { "name": "sail" }
   ]
 }
