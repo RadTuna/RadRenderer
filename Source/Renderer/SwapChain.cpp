@@ -29,7 +29,7 @@ bool RenderSwapChain::Create(RenderDevice* device)
     assert(device != nullptr);
     mRenderDevice = device;
 
-    const SwapChainSupportDetails details = device->QuerySwapCahinSupport();
+    const SwapChainSupportDetails details = device->QuerySwapChainSupport();
     const VkSurfaceFormatKHR surfaceFormat = ChooseSwapSurfaceFormat(details.Formats);
     const VkPresentModeKHR presentMode = ChooseSwapPresentMode(details.PresentModes);
     const VkExtent2D extent = ChooseSwapExtent(details.Capabilities);
@@ -39,6 +39,9 @@ bool RenderSwapChain::Create(RenderDevice* device)
     {
         imageCount = details.Capabilities.maxImageCount;
     }
+
+    assert(MAX_SWAPCHAIN_IMAGE_COUNT > details.Capabilities.minImageCount);
+    imageCount = std::min(imageCount, MAX_SWAPCHAIN_IMAGE_COUNT);
 
     VkSwapchainCreateInfoKHR swapChainCreateInfo = {};
     swapChainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
@@ -74,7 +77,9 @@ bool RenderSwapChain::Create(RenderDevice* device)
     }
 
     mExtent = extent;
+    mSurfaceFormat = surfaceFormat;
     mImageFormat = surfaceFormat.format;
+    mPresentMode = presentMode;
 
     uint32_t swapImageCount = 0;
     VK_ASSERT(vkGetSwapchainImagesKHR(*device, mSwapChain, &swapImageCount, nullptr));

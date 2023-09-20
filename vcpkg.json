@@ -6,7 +6,7 @@
   "supports": "windows & x64",
   "dependencies": [
     { "name": "assimp" },
-    { "name": "imgui", "features": [ "glfw-binding", "vulkan-binding" ] },
+    { "name": "imgui", "features": [ "docking-experimental", "glfw-binding", "vulkan-binding" ] },
     { "name": "glm" },
     { "name": "glfw3" },
     { "name": "sail" }

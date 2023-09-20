@@ -17,6 +17,9 @@ public:
     virtual void Loop() = 0;
     virtual void Deinitialize() = 0;
 
+    virtual void StartFrame() { }
+    virtual void EndFrame() { }
+
 protected:
     class Application* mApp;
 

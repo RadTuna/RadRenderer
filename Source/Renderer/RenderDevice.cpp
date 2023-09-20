@@ -181,12 +181,12 @@ QueueFamilyIndices RenderDevice::FindQueueFamilies(VkPhysicalDevice physicalDevi
     return indices;
 }
 
-SwapChainSupportDetails RenderDevice::QuerySwapCahinSupport() const
+SwapChainSupportDetails RenderDevice::QuerySwapChainSupport() const
 {
-    return QuerySwapCahinSupport(mPhysicalDevice);
+    return QuerySwapChainSupport(mPhysicalDevice);
 }
 
-SwapChainSupportDetails RenderDevice::QuerySwapCahinSupport(VkPhysicalDevice physicalDevice) const
+SwapChainSupportDetails RenderDevice::QuerySwapChainSupport(VkPhysicalDevice physicalDevice) const
 {
     SwapChainSupportDetails details;
 
@@ -489,7 +489,7 @@ bool RenderDevice::IsDeviceSuitable(VkPhysicalDevice physicalDevice) const
     bool bSwapChainSupported = false;
     if (bExtensionSupported)
     {
-        const SwapChainSupportDetails details = QuerySwapCahinSupport(physicalDevice);
+        const SwapChainSupportDetails details = QuerySwapChainSupport(physicalDevice);
         bSwapChainSupported = !details.Formats.empty() && !details.PresentModes.empty();
     }
 

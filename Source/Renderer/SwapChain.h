@@ -27,7 +27,9 @@ public:
     size_t GetImageCount() const { return mSwapChainImages.size(); }
 
     const VkExtent2D& GetExtent() const { return mExtent; }
+    VkSurfaceFormatKHR GetSurfaceFormat() const { return mSurfaceFormat; }
     VkFormat GetImageFormat() const { return mImageFormat; }
+    VkPresentModeKHR GetPresentMode() const { return mPresentMode; }
 
     VkSwapchainKHR GetSwapChain() const { return mSwapChain; }
     operator VkSwapchainKHR() const { return mSwapChain; }
@@ -46,6 +48,8 @@ private:
     std::vector<VkFramebuffer> mFrameBuffers;
 
     VkExtent2D mExtent;
+    VkSurfaceFormatKHR mSurfaceFormat;
     VkFormat mImageFormat;
+    VkPresentModeKHR mPresentMode;
 
 };

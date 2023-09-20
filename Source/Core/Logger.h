@@ -12,9 +12,8 @@ enum class ELogType
     Core,
     Editor,
     Renderer,
-    Resource,
     World,
-    Count = 6
+    Count
 };
 
 constexpr char* LogTypeStringTable[static_cast<uint32_t>(ELogType::Count)] = {
@@ -22,7 +21,6 @@ constexpr char* LogTypeStringTable[static_cast<uint32_t>(ELogType::Count)] = {
     "Core",
     "Editor",
     "Renderer",
-    "Resource",
     "World"
 };
 
@@ -31,7 +29,7 @@ enum class ELogClass
     Log = 0,
     Warning,
     Error,
-    Count = 3
+    Count
 };
 
 constexpr char* LogClassStringTable[static_cast<uint32_t>(ELogClass::Count)] = {

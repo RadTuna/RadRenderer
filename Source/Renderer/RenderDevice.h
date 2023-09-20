@@ -42,8 +42,8 @@ public:
 
     QueueFamilyIndices FindQueueFamilies() const;
     QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice physicalDevice) const;
-    SwapChainSupportDetails QuerySwapCahinSupport() const;
-    SwapChainSupportDetails QuerySwapCahinSupport(VkPhysicalDevice physicalDevice) const;
+    SwapChainSupportDetails QuerySwapChainSupport() const;
+    SwapChainSupportDetails QuerySwapChainSupport(VkPhysicalDevice physicalDevice) const;
     uint32_t FindPhysicalMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 
     VkQueue GetGraphicsQueue() const { return mGraphicsQueue; }
@@ -53,7 +53,8 @@ public:
     VkDevice GetDevice() const { return mDevice; }
     operator VkDevice() const { return mDevice; }
 
-    // TODO : Remove this function
+    VkInstance GetInstance() const { return mInstance; }
+    VkPhysicalDevice GetPhysicalDevice() const { return mPhysicalDevice; }
     VkSurfaceKHR GetSurface() const { return mSurface; }
 
 private:

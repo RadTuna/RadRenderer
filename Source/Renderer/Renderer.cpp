@@ -10,6 +10,9 @@
 #include <array>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <imgui.h>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_vulkan.h>
 
 // Internal Include
 #include "Core/Application.h"
@@ -150,6 +153,12 @@ bool Renderer::Initialize()
         return bResult;
     }
 
+    bResult = CreateImGuiBackend();
+    if (!bResult)
+    {
+        return bResult;
+    }
+
     RAD_LOG(ELogType::Renderer, ELogClass::Log, "Complete renderer module initialization.");
     return bResult;
 }
@@ -170,7 +179,7 @@ void Renderer::Loop()
         RecreateDependSwapChainObjects();
         return;
     }
-    else if (result == VK_SUBOPTIMAL_KHR) // 이미지를 얻는 것에는 성공. 하지만 스왑체인 재생성 필요.
+    else if (result == VK_SUBOPTIMAL_KHR)
     {
         FrameBufferResized();
     }
@@ -188,8 +197,12 @@ void Renderer::Loop()
     mImageInFlightFence[imageIndex] = mInFlightFence[mCurrentFrame];
     VK_ASSERT(vkResetFences(*mRenderDevice, 1, &mInFlightFence[mCurrentFrame]));
 
-    // temp transform function
-    UpdateUniformBuffer(imageIndex);
+    {
+        RecordRenderCommands();
+
+        // temp transform function
+        UpdateUniformBuffer(mCurrentFrame);
+    }
 
     VkSubmitInfo submitInfo = {};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -256,8 +269,12 @@ void Renderer::Deinitialize()
     mIndexBuffer = nullptr;
 
     vkDestroyDescriptorSetLayout(*mRenderDevice, mDescriptorSetLayout, nullptr);
+    vkDestroyDescriptorPool(*mRenderDevice, mDescriptorPool, nullptr);
 
     DestroyDependSwapChainObjects();
+
+    ImGui_ImplVulkan_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
 
     for (int32_t idx = 0; idx < mAllRenderObjects.size(); ++idx)
     {
@@ -265,6 +282,27 @@ void Renderer::Deinitialize()
     }
 
     RAD_LOG(ELogType::Renderer, ELogClass::Log, "Complete renderer module deinitialization.");
+}
+
+void Renderer::StartFrame()
+{
+    ImGui_ImplVulkan_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+}
+
+void Renderer::EndFrame()
+{
+    ImGuiIO& io = ImGui::GetIO();
+
+    // Update and Render additional Platform Windows
+    if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+    {
+        ImGui::UpdatePlatformWindows();
+        ImGui::RenderPlatformWindowsDefault();
+    }
+
+    ImGui::EndFrame();
 }
 
 bool Renderer::RecreateDependSwapChainObjects()
@@ -313,12 +351,6 @@ bool Renderer::RecreateDependSwapChainObjects()
         return bResult;
     }
 
-    bResult = CreateDescriptorPool();
-    if (!bResult)
-    {
-        return bResult;
-    }
-
     bResult = CreateDescriptorSets();
     if (!bResult)
     {
@@ -344,7 +376,6 @@ void Renderer::DestroyDependSwapChainObjects()
         mUniformBuffers[i] = nullptr;
     }
 
-    vkDestroyDescriptorPool(*mRenderDevice, mDescriptorPool, nullptr);
     vkDestroyPipeline(*mRenderDevice, mGraphicPipeline, nullptr);
     vkDestroyPipelineLayout(*mRenderDevice, mPipelineLayout, nullptr);
     vkDestroyRenderPass(*mRenderDevice, mRenderPass, nullptr);
@@ -641,7 +672,7 @@ bool Renderer::CreateCommandPools()
     VkCommandPoolCreateInfo commandPoolCreateInfo = {};
     commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     commandPoolCreateInfo.queueFamilyIndex = queueFamilyIndices.GraphicsFamily.value();
-    commandPoolCreateInfo.flags = 0;
+    commandPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
     VkResult result = vkCreateCommandPool(*mRenderDevice, &commandPoolCreateInfo, nullptr, &mGraphicsCommandPool);
     if (result != VK_SUCCESS)
@@ -721,17 +752,28 @@ bool Renderer::CreateUniformBuffer()
 
 bool Renderer::CreateDescriptorPool()
 {
-    const size_t swapChainImageCount = mSwapChain->GetImageCount();
+    VkDescriptorPoolSize uniformPoolSize = {};
+    uniformPoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    uniformPoolSize.descriptorCount = MAX_SWAPCHAIN_IMAGE_COUNT;
 
-    VkDescriptorPoolSize poolSize = {};
-    poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    poolSize.descriptorCount = static_cast<uint32_t>(swapChainImageCount);
+    // for ImGui
+    VkDescriptorPoolSize imageSamplerPoolSize = {};
+    imageSamplerPoolSize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    imageSamplerPoolSize.descriptorCount = 1;
+
+    VkDescriptorPoolSize poolSizes[] = { uniformPoolSize, imageSamplerPoolSize };
+
+    uint32_t maxSetCount = 0;
+    for (size_t i = 0; i < ArraySize(poolSizes); ++i)
+    {
+        maxSetCount += poolSizes[i].descriptorCount;
+    }
 
     VkDescriptorPoolCreateInfo poolCreateInfo = {};
     poolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    poolCreateInfo.poolSizeCount = 1;
-    poolCreateInfo.pPoolSizes = &poolSize;
-    poolCreateInfo.maxSets = static_cast<uint32_t>(swapChainImageCount);
+    poolCreateInfo.poolSizeCount = ArraySize(poolSizes);
+    poolCreateInfo.pPoolSizes = poolSizes;
+    poolCreateInfo.maxSets = maxSetCount;
 
     const VkResult result = vkCreateDescriptorPool(*mRenderDevice, &poolCreateInfo, nullptr, &mDescriptorPool);
     if (result != VK_SUCCESS)
@@ -803,60 +845,6 @@ bool Renderer::CreateCommandBuffers()
         return false;
     }
 
-    for (size_t i = 0; i < mCommandBuffers.size(); ++i)
-    {
-        VkCommandBufferBeginInfo commandBufferBeginInfo = {};
-        commandBufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        commandBufferBeginInfo.flags = 0;
-        commandBufferBeginInfo.pInheritanceInfo = nullptr;
-
-        VkResult passResult = vkBeginCommandBuffer(mCommandBuffers[i], &commandBufferBeginInfo);
-        if (passResult != VK_SUCCESS)
-        {
-            RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to begin recording command buffer.");
-            return false;
-        }
-
-        assert(mCommandBuffers.size() == swapChainImageCount);
-        VkRenderPassBeginInfo renderPassBeginInfo = {};
-        renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        renderPassBeginInfo.renderPass = mRenderPass;
-        renderPassBeginInfo.framebuffer = mSwapChain->GetFrameBuffer(i);
-        renderPassBeginInfo.renderArea.offset = { 0, 0 };
-        renderPassBeginInfo.renderArea.extent = mSwapChain->GetExtent();
-
-        VkClearValue clearColor = {};
-        clearColor.color = { 0.f, 0.f, 0.f, 1.f };
-
-        renderPassBeginInfo.clearValueCount = 1;
-        renderPassBeginInfo.pClearValues = &clearColor;
-
-        // Begin render command
-        vkCmdBeginRenderPass(mCommandBuffers[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-        vkCmdBindPipeline(mCommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, mGraphicPipeline);
-
-        VkBuffer vertexBuffers[] = { mVertexBuffer->GetVkBuffer()};
-        VkDeviceSize offsets[] = { 0 };
-        vkCmdBindVertexBuffers(mCommandBuffers[i], 0, 1, vertexBuffers, offsets);
-        vkCmdBindIndexBuffer(mCommandBuffers[i], mIndexBuffer->GetVkBuffer(), 0, VK_INDEX_TYPE_UINT16);
-
-        assert(mDescriptorSets.size() == mCommandBuffers.size());
-        vkCmdBindDescriptorSets(mCommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, mPipelineLayout, 0, 1, &mDescriptorSets[i], 0, nullptr);
-
-        vkCmdDrawIndexed(mCommandBuffers[i], static_cast<uint32_t>(Vertex::Indices.size()), 1, 0, 0, 0);
-
-        vkCmdEndRenderPass(mCommandBuffers[i]);
-        // End render command
-
-        passResult = vkEndCommandBuffer(mCommandBuffers[i]);
-        if (passResult != VK_SUCCESS)
-        {
-            RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to end recording command buffer.");
-            return false;
-        }
-    }
-
     return true;
 }
 
@@ -900,6 +888,104 @@ bool Renderer::CreateSyncObjects()
     }
 
     return true;
+}
+
+bool Renderer::CreateImGuiBackend()
+{
+    // Setup Dear ImGui
+    const QueueFamilyIndices queueFamilyIndices = mRenderDevice->FindQueueFamilies();
+
+    ImGui_ImplGlfw_InitForVulkan(mApp->GetWindowObject(), true);
+    ImGui_ImplVulkan_InitInfo initInfo = { 0, };
+    initInfo.Instance = mRenderDevice->GetInstance();
+    initInfo.PhysicalDevice = mRenderDevice->GetPhysicalDevice();
+    initInfo.Device = *mRenderDevice;
+    initInfo.QueueFamily = queueFamilyIndices.GraphicsFamily.value();
+    initInfo.Queue = mRenderDevice->GetGraphicsQueue();
+    initInfo.PipelineCache = VK_NULL_HANDLE;
+    initInfo.DescriptorPool = mDescriptorPool;
+    initInfo.Subpass = 0;
+    initInfo.MinImageCount = mSwapChain->GetImageCount();
+    initInfo.ImageCount = mSwapChain->GetImageCount();
+    initInfo.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+    initInfo.Allocator = nullptr;
+    initInfo.CheckVkResultFn = nullptr;
+    ImGui_ImplVulkan_Init(&initInfo, mRenderPass);
+
+    // Upload Fonts
+    VkCommandBufferAllocateInfo allocInfo = {};
+    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocInfo.commandPool = mTransferCommandPool;
+    allocInfo.commandBufferCount = 1;
+
+    VkCommandBuffer commandBuffer;
+    VK_ASSERT(vkAllocateCommandBuffers(*mRenderDevice, &allocInfo, &commandBuffer));
+
+    VkCommandBufferBeginInfo beginInfo = {};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+    VK_ASSERT(vkBeginCommandBuffer(commandBuffer, &beginInfo));
+
+    ImGui_ImplVulkan_CreateFontsTexture(commandBuffer);
+
+    VK_ASSERT(vkEndCommandBuffer(commandBuffer));
+
+    VkSubmitInfo submitInfo = {};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &commandBuffer;
+
+    VK_ASSERT(vkQueueSubmit(mRenderDevice->GetTransferQueue(), 1, &submitInfo, VK_NULL_HANDLE));
+    VK_ASSERT(vkQueueWaitIdle(mRenderDevice->GetTransferQueue()));
+
+    vkFreeCommandBuffers(*mRenderDevice, mTransferCommandPool, 1, &commandBuffer);
+    ImGui_ImplVulkan_DestroyFontUploadObjects();
+
+    return true;
+}
+
+void Renderer::RecordRenderCommands()
+{
+    VkCommandBuffer commandBuffer = GetCurrrentCommandBuffer();
+    vkResetCommandBuffer(commandBuffer, 0);
+
+    {
+        SCOPED_VK_COMMAND(commandBuffer);
+
+        VkRenderPassBeginInfo renderPassBeginInfo = {};
+        renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        renderPassBeginInfo.renderPass = mRenderPass;
+        renderPassBeginInfo.framebuffer = mSwapChain->GetFrameBuffer(mCurrentFrame);
+        renderPassBeginInfo.renderArea.offset = { 0, 0 };
+        renderPassBeginInfo.renderArea.extent = mSwapChain->GetExtent();
+
+        VkClearValue clearColor = {};
+        clearColor.color = { 0.f, 0.f, 0.f, 1.f };
+
+        renderPassBeginInfo.clearValueCount = 1;
+        renderPassBeginInfo.pClearValues = &clearColor;
+
+        vkCmdBeginRenderPass(commandBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mGraphicPipeline);
+
+        VkBuffer vertexBuffers[] = { mVertexBuffer->GetVkBuffer() };
+        VkDeviceSize offsets[] = { 0 };
+        vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+        vkCmdBindIndexBuffer(commandBuffer, mIndexBuffer->GetVkBuffer(), 0, VK_INDEX_TYPE_UINT16);
+
+        assert(mDescriptorSets.size() == mCommandBuffers.size());
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipelineLayout, 0, 1, &mDescriptorSets[mCurrentFrame], 0, nullptr);
+
+        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(Vertex::Indices.size()), 1, 0, 0, 0);
+
+        ImGui::Render();
+        ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
+
+        vkCmdEndRenderPass(commandBuffer);
+    }
 }
 
 bool Renderer::CreateShaderModule(VkShaderModule* outShaderModule, const std::vector<uint8_t>& shaderBinary)

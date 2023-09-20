@@ -4,6 +4,7 @@
 
 // External Include
 #include <cassert>
+#include <imgui.h>
 
 // Internal Include
 #include "Core/Module.h"
@@ -24,9 +25,10 @@ Application::Application(uint32_t width, uint32_t height, const std::string& tit
     , mHeight(height)
     , mAppTitle(title)
 {
+    // module load order
+    mModules.push_back(mWorld.get());
     mModules.push_back(mEditor.get());
     mModules.push_back(mRenderer.get());
-    mModules.push_back(mWorld.get());
 
     InitializeWindow();
 }
@@ -48,6 +50,13 @@ void Application::CreateApplication(uint32_t width, uint32_t height, const std::
 bool Application::Run()
 {
     RAD_LOG(ELogType::Core, ELogClass::Log, "Start application.");
+
+    // init imgui
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO();
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable; // Enable Docking
 
     bool bSuccessInit = true;
     for (Module* myModule : mModules)
@@ -74,6 +83,9 @@ bool Application::Run()
         myModule->Deinitialize();
     }
 
+    // destory imgui
+    ImGui::DestroyContext();
+
     RAD_LOG(ELogType::Core, ELogClass::Log, "End application.");
 
     return bSuccessInit;
@@ -83,7 +95,17 @@ void Application::Loop()
 {
     for (Module* myModule : mModules)
     {
+        myModule->StartFrame();
+    }
+
+    for (Module* myModule : mModules)
+    {
         myModule->Loop();
+    }
+
+    for (Module* myModule : mModules)
+    {
+        myModule->EndFrame();
     }
 }
 

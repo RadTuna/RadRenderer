@@ -17,6 +17,34 @@
 
 #pragma endregion
 
+#pragma region Class
+
+class ScopedVkCommand final
+{
+public:
+    ScopedVkCommand(VkCommandBuffer commandBuffer, uint32_t inFlags = 0, VkCommandBufferInheritanceInfo* inheritInfo = nullptr)
+        : mCommandBuffer(commandBuffer)
+    {
+        VkCommandBufferBeginInfo commandBufferBeginInfo = {};
+        commandBufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        commandBufferBeginInfo.flags = inFlags;
+        commandBufferBeginInfo.pInheritanceInfo = inheritInfo;
+        vkBeginCommandBuffer(commandBuffer, &commandBufferBeginInfo);
+    }
+
+    ~ScopedVkCommand()
+    {
+        vkEndCommandBuffer(mCommandBuffer);
+    }
+
+private:
+    VkCommandBuffer mCommandBuffer;
+
+};
+
+#define SCOPED_VK_COMMAND(CmdBuffer) ScopedVkCommand scopedVkCommand(CmdBuffer)
+
+#pragma endregion
 
 #pragma region Functions
 

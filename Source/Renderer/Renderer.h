@@ -29,6 +29,9 @@ public:
     void Loop() override;
     void Deinitialize() override;
 
+    void StartFrame() override;
+    void EndFrame() override;
+
     bool RecreateDependSwapChainObjects();
     void DestroyDependSwapChainObjects();
 
@@ -37,6 +40,7 @@ public:
     bool CanRender() const { return mbCanRender; }
 
 private:
+    // for Initialize
     bool CreateRenderPass();
     bool CreateDescriptorSetLayout();
     bool CreateGraphicsPipeline();
@@ -48,8 +52,13 @@ private:
     bool CreateDescriptorSets();
     bool CreateCommandBuffers();
     bool CreateSyncObjects();
+    bool CreateImGuiBackend();
+
+    // for Loop
+    void RecordRenderCommands();
 
     bool CreateShaderModule(VkShaderModule* outShaderModule, const std::vector<uint8_t>& shaderBinary);
+    VkCommandBuffer GetCurrrentCommandBuffer() const { return mCommandBuffers[mCurrentFrame]; }
 
     // temp transform function
     void UpdateUniformBuffer(uint32_t currentImage);

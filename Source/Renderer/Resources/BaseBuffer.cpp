@@ -144,23 +144,30 @@ void BaseBuffer::TransferBuffer(VkCommandPool commandPool)
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-    VK_ASSERT(vkBeginCommandBuffer(commandBuffer, &beginInfo));
 
-    VkBufferCopy copyRegion = {};
-    copyRegion.srcOffset = 0;
-    copyRegion.dstOffset = 0;
-    copyRegion.size = mBufferSize;
+    {
+        SCOPED_VK_COMMAND(commandBuffer);
 
-    vkCmdCopyBuffer(commandBuffer, mStagingBuffer, mBuffer, 1, &copyRegion);
+        VkBufferCopy copyRegion = {};
+        copyRegion.srcOffset = 0;
+        copyRegion.dstOffset = 0;
+        copyRegion.size = mBufferSize;
 
-    VK_ASSERT(vkEndCommandBuffer(commandBuffer));
+        vkCmdCopyBuffer(commandBuffer, mStagingBuffer, mBuffer, 1, &copyRegion);
+    }
 
     VkSubmitInfo submitInfo = {};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     submitInfo.commandBufferCount = 1;
     submitInfo.pCommandBuffers = &commandBuffer;
 
-    VK_ASSERT(vkQueueSubmit(mRenderDevice->GetTransferQueue(), 1, &submitInfo, VK_NULL_HANDLE));
+    VkResult submitResult = vkQueueSubmit(mRenderDevice->GetTransferQueue(), 1, &submitInfo, VK_NULL_HANDLE);
+    if (submitResult != VK_SUCCESS)
+    {
+        RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to submit transfer command buffer.");
+        assert(false);
+    }
+
     VK_ASSERT(vkQueueWaitIdle(mRenderDevice->GetTransferQueue()));
     
     vkFreeCommandBuffers(*mRenderDevice, commandPool, 1, &commandBuffer);
