@@ -55,7 +55,7 @@ private:
     bool CreateImGuiBackend();
 
     // for Loop
-    void RecordRenderCommands();
+    void RecordRenderCommands(uint32_t imageIndex);
 
     bool CreateShaderModule(VkShaderModule* outShaderModule, const std::vector<uint8_t>& shaderBinary);
     VkCommandBuffer GetCurrrentCommandBuffer() const { return mCommandBuffers[mCurrentFrame]; }
@@ -63,9 +63,10 @@ private:
     // temp transform function
     void UpdateUniformBuffer(uint32_t currentImage);
 
-private:
-    static const uint32_t MAX_FRAME_IN_FLIGHT;
+public:
+    static constexpr uint32_t MAX_FRAME_IN_FLIGHT = 3;
 
+private:
     std::vector<std::unique_ptr<RenderObject>> mAllRenderObjects;
     RenderDevice* mRenderDevice;
     RenderSwapChain* mSwapChain;
@@ -88,7 +89,6 @@ private:
     std::vector<VkSemaphore> mImageAvailableSemaphores;
     std::vector<VkSemaphore> mRenderFinishedSemaphores;
     std::vector<VkFence> mInFlightFence;
-    std::vector<VkFence> mImageInFlightFence;
     uint32_t mCurrentFrame;
 
     std::vector<VkCommandBuffer> mCommandBuffers;

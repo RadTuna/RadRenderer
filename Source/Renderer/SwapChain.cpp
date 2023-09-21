@@ -9,6 +9,7 @@
 // Internal Include
 #include "Core/Application.h"
 #include "Renderer/RenderDevice.h"
+#include "Renderer/Renderer.h"
 
 
 RenderSwapChain::RenderSwapChain()
@@ -40,8 +41,8 @@ bool RenderSwapChain::Create(RenderDevice* device)
         imageCount = details.Capabilities.maxImageCount;
     }
 
-    assert(MAX_SWAPCHAIN_IMAGE_COUNT > details.Capabilities.minImageCount);
-    imageCount = std::min(imageCount, MAX_SWAPCHAIN_IMAGE_COUNT);
+    assert(Renderer::MAX_FRAME_IN_FLIGHT >= details.Capabilities.minImageCount);
+    imageCount = std::min(imageCount, Renderer::MAX_FRAME_IN_FLIGHT);
 
     VkSwapchainCreateInfoKHR swapChainCreateInfo = {};
     swapChainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;

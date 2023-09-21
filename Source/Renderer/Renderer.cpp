@@ -25,8 +25,6 @@
 #include "Renderer/Resources/IndexBuffer.h"
 
 
-const uint32_t Renderer::MAX_FRAME_IN_FLIGHT = 3;
-
 Renderer::Renderer(class Application* inApp)
     : Module(inApp)
     , mRenderDevice(nullptr)
@@ -189,16 +187,10 @@ void Renderer::Loop()
         return;
     }
 
-    if (mImageInFlightFence[imageIndex] != VK_NULL_HANDLE)
-    {
-        VK_ASSERT(vkWaitForFences(*mRenderDevice, 1, &mImageInFlightFence[imageIndex], VK_TRUE, UINT64_MAX));
-    }
-
-    mImageInFlightFence[imageIndex] = mInFlightFence[mCurrentFrame];
     VK_ASSERT(vkResetFences(*mRenderDevice, 1, &mInFlightFence[mCurrentFrame]));
 
     {
-        RecordRenderCommands();
+        RecordRenderCommands(imageIndex);
 
         // temp transform function
         UpdateUniformBuffer(mCurrentFrame);
@@ -214,7 +206,7 @@ void Renderer::Loop()
     submitInfo.pWaitDstStageMask = waitStages;
 
     submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &mCommandBuffers[imageIndex];
+    submitInfo.pCommandBuffers = &mCommandBuffers[mCurrentFrame];
 
     VkSemaphore signalSemaphores[] = { mRenderFinishedSemaphores[mCurrentFrame] };
     submitInfo.signalSemaphoreCount = static_cast<uint32_t>(ArraySize(signalSemaphores));
@@ -229,7 +221,7 @@ void Renderer::Loop()
 
     VkPresentInfoKHR presentInfo = {};
     presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-    presentInfo.waitSemaphoreCount = static_cast<uint32_t>(ArraySize(waitSemaphores));
+    presentInfo.waitSemaphoreCount = static_cast<uint32_t>(ArraySize(signalSemaphores));
     presentInfo.pWaitSemaphores = signalSemaphores;
 
     VkSwapchainKHR swapChains[] = { *mSwapChain };
@@ -244,7 +236,7 @@ void Renderer::Loop()
         RecreateDependSwapChainObjects();
     }
 
-    mCurrentFrame = (mCurrentFrame + 1) % MAX_FRAME_IN_FLIGHT;
+    mCurrentFrame = (mCurrentFrame + 1) % mSwapChain->GetImageCount();
 }
 
 void Renderer::Deinitialize()
@@ -317,7 +309,6 @@ bool Renderer::RecreateDependSwapChainObjects()
         return false;
     }
 
-    vkFreeCommandBuffers(*mRenderDevice, mGraphicsCommandPool, static_cast<uint32_t>(mCommandBuffers.size()), mCommandBuffers.data());
     DestroyDependSwapChainObjects();
 
     bool bResult = mSwapChain->Create(mRenderDevice);
@@ -351,12 +342,14 @@ bool Renderer::RecreateDependSwapChainObjects()
         return bResult;
     }
 
+    vkFreeDescriptorSets(*mRenderDevice, mDescriptorPool, static_cast<uint32_t>(mDescriptorSets.size()), mDescriptorSets.data());
     bResult = CreateDescriptorSets();
     if (!bResult)
     {
         return bResult;
     }
 
+    vkFreeCommandBuffers(*mRenderDevice, mGraphicsCommandPool, static_cast<uint32_t>(mCommandBuffers.size()), mCommandBuffers.data());
     bResult = CreateCommandBuffers();
     if (!bResult)
     {
@@ -754,7 +747,7 @@ bool Renderer::CreateDescriptorPool()
 {
     VkDescriptorPoolSize uniformPoolSize = {};
     uniformPoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    uniformPoolSize.descriptorCount = MAX_SWAPCHAIN_IMAGE_COUNT;
+    uniformPoolSize.descriptorCount = MAX_FRAME_IN_FLIGHT;
 
     // for ImGui
     VkDescriptorPoolSize imageSamplerPoolSize = {};
@@ -771,6 +764,7 @@ bool Renderer::CreateDescriptorPool()
 
     VkDescriptorPoolCreateInfo poolCreateInfo = {};
     poolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    poolCreateInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
     poolCreateInfo.poolSizeCount = ArraySize(poolSizes);
     poolCreateInfo.pPoolSizes = poolSizes;
     poolCreateInfo.maxSets = maxSetCount;
@@ -854,7 +848,6 @@ bool Renderer::CreateSyncObjects()
     mImageAvailableSemaphores.resize(MAX_FRAME_IN_FLIGHT);
     mRenderFinishedSemaphores.resize(MAX_FRAME_IN_FLIGHT);
     mInFlightFence.resize(MAX_FRAME_IN_FLIGHT);
-    mImageInFlightFence.resize(swapChainImageCount, VK_NULL_HANDLE);
 
     VkSemaphoreCreateInfo semaphoreCreateInfo = {};
     semaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -946,7 +939,7 @@ bool Renderer::CreateImGuiBackend()
     return true;
 }
 
-void Renderer::RecordRenderCommands()
+void Renderer::RecordRenderCommands(uint32_t imageIndex)
 {
     VkCommandBuffer commandBuffer = GetCurrrentCommandBuffer();
     vkResetCommandBuffer(commandBuffer, 0);
@@ -957,7 +950,7 @@ void Renderer::RecordRenderCommands()
         VkRenderPassBeginInfo renderPassBeginInfo = {};
         renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
         renderPassBeginInfo.renderPass = mRenderPass;
-        renderPassBeginInfo.framebuffer = mSwapChain->GetFrameBuffer(mCurrentFrame);
+        renderPassBeginInfo.framebuffer = mSwapChain->GetFrameBuffer(imageIndex);
         renderPassBeginInfo.renderArea.offset = { 0, 0 };
         renderPassBeginInfo.renderArea.extent = mSwapChain->GetExtent();
 

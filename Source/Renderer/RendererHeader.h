@@ -18,11 +18,4 @@
 
 #pragma endregion
 
-#pragma region Constant
-
-constexpr uint32_t MAX_SWAPCHAIN_IMAGE_COUNT = 6;
-
-#pragma endregion
-
-
 
