@@ -13,9 +13,9 @@ World::World(class Application* inApp)
 
 bool World::Initialize()
 {
-    RAD_LOG(ELogType::World, ELogClass::Log, "Start world module initialization.");
+    RAD_LOG(World, Log, "Start world module initialization.");
 
-    RAD_LOG(ELogType::World, ELogClass::Log, "Complete world module initialization.");
+    RAD_LOG(World, Log, "Complete world module initialization.");
     return true;
 }
 
@@ -25,7 +25,7 @@ void World::Loop()
 
 void World::Deinitialize()
 {
-    RAD_LOG(ELogType::World, ELogClass::Log, "Start world module deinitialization.");
+    RAD_LOG(World, Log, "Start world module deinitialization.");
 
-    RAD_LOG(ELogType::World, ELogClass::Log, "Complete world module deinitialization.");
+    RAD_LOG(World, Log, "Complete world module deinitialization.");
 }

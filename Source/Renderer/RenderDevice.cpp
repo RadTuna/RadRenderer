@@ -220,7 +220,7 @@ uint32_t RenderDevice::FindPhysicalMemoryType(uint32_t typeFilter, VkMemoryPrope
         }
     }
 
-    RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to find suitable physical device memory type.");
+    RAD_LOG(Renderer, Error, "Failed to find suitable physical device memory type.");
     return UINT32_MAX;
 }
 
@@ -265,7 +265,7 @@ bool RenderDevice::CreateInstance()
     VkResult result = vkCreateInstance(&instanceCreateInfo, nullptr, &mInstance);
     if (result != VK_SUCCESS)
     {
-        RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to create Vulkan instance.");
+        RAD_LOG(Renderer, Error, "Failed to create Vulkan instance.");
         return false;
     }
 
@@ -282,7 +282,7 @@ bool RenderDevice::CreateInstance()
             });
         if (iterator == mVkInstanceExtensions.end())
         {
-            RAD_LOG(ELogType::Renderer, ELogClass::Error, "Required Vulkan extension does not exist");
+            RAD_LOG(Renderer, Error, "Required Vulkan extension does not exist");
             return false;
         }
     }
@@ -294,7 +294,7 @@ bool RenderDevice::CreateInstance()
 #if !defined NDEBUG 
     if (mbEnableValidationLayer && !CheckValidationLayerSupport())
     {
-        RAD_LOG(ELogType::Renderer, ELogClass::Error, "Tried to use the validation layer, but does not exist.");
+        RAD_LOG(Renderer, Error, "Tried to use the validation layer, but does not exist.");
         return false;
     }
 #endif
@@ -311,7 +311,7 @@ bool RenderDevice::CreateDebugMessenger()
     VkResult result = VkHelper::CreateDebugUtilsMessengerEXT(mInstance, &createInfo, nullptr, &mDebugMessenger);
     if (result != VK_SUCCESS)
     {
-        RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to create Vulkan debug messenger.");
+        RAD_LOG(Renderer, Error, "Failed to create Vulkan debug messenger.");
         return false;
     }
 
@@ -331,7 +331,7 @@ bool RenderDevice::CreateSurface()
     VkResult vkResult = glfwCreateWindowSurface(mInstance, windowObject, nullptr, &mSurface);
     if (vkResult != VK_SUCCESS)
     {
-        RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to create window surface.");
+        RAD_LOG(Renderer, Error, "Failed to create window surface.");
         return false;
     }
 
@@ -344,7 +344,7 @@ bool RenderDevice::PickPhysicalDevice()
     VK_ASSERT(vkEnumeratePhysicalDevices(mInstance, &deviceCount, nullptr));
     if (deviceCount == 0)
     {
-        RAD_LOG(ELogType::Renderer, ELogClass::Error, "There are no graphics devices that support Vulkan.");
+        RAD_LOG(Renderer, Error, "There are no graphics devices that support Vulkan.");
         return false;
     }
 
@@ -361,7 +361,7 @@ bool RenderDevice::PickPhysicalDevice()
 
     if (mPhysicalDevice == VK_NULL_HANDLE)
     {
-        RAD_LOG(ELogType::Renderer, ELogClass::Error, "Falied to find a suitable GPU.");
+        RAD_LOG(Renderer, Error, "Falied to find a suitable GPU.");
         return false;
     }
 
@@ -417,7 +417,7 @@ bool RenderDevice::CreateLogicalDevice()
     VkResult result = vkCreateDevice(mPhysicalDevice, &deviceCreateInfo, nullptr, &mDevice);
     if (result != VK_SUCCESS)
     {
-        RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to create Vulkan logical device.");
+        RAD_LOG(Renderer, Error, "Failed to create Vulkan logical device.");
         return false;
     }
 
@@ -539,7 +539,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL RenderDevice::OnVkDebugLog(
         logClass = ELogClass::Error;
     }
 
-    RAD_LOG(ELogType::Renderer, logClass, pCallBackData->pMessage);
+    RAD_DYN_LOG(ELogType::Renderer, logClass, pCallBackData->pMessage);
 
     return VK_FALSE;
 }

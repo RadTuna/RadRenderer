@@ -34,7 +34,7 @@ bool BaseBuffer::CreateBufferInternal(VkBuffer* buffer, VkDeviceMemory* bufferMe
     VkResult result = vkCreateBuffer(*mRenderDevice, &bufferCreateInfo, nullptr, buffer);
     if (result != VK_SUCCESS)
     {
-        RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to create buffer.");
+        RAD_LOG(Renderer, Error, "Failed to create buffer.");
         return false;
     }
 
@@ -52,7 +52,7 @@ bool BaseBuffer::CreateBufferInternal(VkBuffer* buffer, VkDeviceMemory* bufferMe
     result = vkAllocateMemory(*mRenderDevice, &allocInfo, nullptr, bufferMemory);
     if (result != VK_SUCCESS)
     {
-        RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to allocate buffer memory.");
+        RAD_LOG(Renderer, Error, "Failed to allocate buffer memory.");
         return false;
     }
 
@@ -164,7 +164,7 @@ void BaseBuffer::TransferBuffer(VkCommandPool commandPool)
     VkResult submitResult = vkQueueSubmit(mRenderDevice->GetTransferQueue(), 1, &submitInfo, VK_NULL_HANDLE);
     if (submitResult != VK_SUCCESS)
     {
-        RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to submit transfer command buffer.");
+        RAD_LOG(Renderer, Error, "Failed to submit transfer command buffer.");
         assert(false);
     }
 

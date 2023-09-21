@@ -45,7 +45,7 @@ bool TryReadShaderFile(std::vector<uint8_t>* outBinary, const std::string& fileP
     std::ifstream file(filePath, std::ios::ate | std::ios::binary);
     if (file.is_open() == false)
     {
-        RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to open file at that path");
+        RAD_LOG(Renderer, Error, "Failed to open file at that path");
         return false;
     }
 

@@ -73,7 +73,7 @@ bool RenderSwapChain::Create(RenderDevice* device)
     VkResult result = vkCreateSwapchainKHR(*device, &swapChainCreateInfo, nullptr, &mSwapChain);
     if (result != VK_SUCCESS)
     {
-        RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to create Vulkan swap chain.");
+        RAD_LOG(Renderer, Error, "Failed to create Vulkan swap chain.");
         return false;
     }
 
@@ -109,7 +109,7 @@ bool RenderSwapChain::Create(RenderDevice* device)
         result = vkCreateImageView(*device, &imageViewCreateInfo, nullptr, &mSwapChainImageViews[i]);
         if (result != VK_SUCCESS)
         {
-            RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to create swap chain image view.");
+            RAD_LOG(Renderer, Error, "Failed to create swap chain image view.");
             return false;
         }
     }
@@ -160,7 +160,7 @@ bool RenderSwapChain::CreateFrameBuffers(VkRenderPass renderPass)
         const VkResult result = vkCreateFramebuffer(*mRenderDevice, &frameBufferCreateInfo, nullptr, &mFrameBuffers[i]);
         if (result != VK_SUCCESS)
         {
-            RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to create frame buffer.");
+            RAD_LOG(Renderer, Error, "Failed to create frame buffer.");
             return false;
         }
     }
@@ -173,7 +173,7 @@ VkSurfaceFormatKHR RenderSwapChain::ChooseSwapSurfaceFormat(const std::vector<Vk
     for (const VkSurfaceFormatKHR avaliableFormat : avaliableFormats)
     {
         if (avaliableFormat.format == VK_FORMAT_B8G8R8A8_SRGB
-            && avaliableFormat.colorSpace == VK_COLORSPACE_SRGB_NONLINEAR_KHR)
+            && avaliableFormat.colorSpace == VK_COLOR_SPACE_DISPLAY_P3_LINEAR_EXT)
         {
             return avaliableFormat;
         }

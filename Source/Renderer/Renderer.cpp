@@ -58,7 +58,7 @@ Renderer::~Renderer()
 
 bool Renderer::Initialize()
 {
-    RAD_LOG(ELogType::Renderer, ELogClass::Log, "Start renderer module initialization.");
+    RAD_LOG(Renderer, Log, "Start renderer module initialization.");
     bool bResult = true;
 
     bResult = mRenderDevice->Create(nullptr);
@@ -157,7 +157,7 @@ bool Renderer::Initialize()
         return bResult;
     }
 
-    RAD_LOG(ELogType::Renderer, ELogClass::Log, "Complete renderer module initialization.");
+    RAD_LOG(Renderer, Log, "Complete renderer module initialization.");
     return bResult;
 }
 
@@ -183,7 +183,7 @@ void Renderer::Loop()
     }
     else if (result != VK_SUCCESS)
     {
-        RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to aquire swap chain image.");
+        RAD_LOG(Renderer, Error, "Failed to aquire swap chain image.");
         return;
     }
 
@@ -215,7 +215,7 @@ void Renderer::Loop()
     result = vkQueueSubmit(mGraphicsQueue, 1, &submitInfo, mInFlightFence[mCurrentFrame]);
     if (result != VK_SUCCESS)
     {
-        RAD_LOG(ELogType::Renderer, ELogClass::Warning, "Failed to submit draw command buffer.");
+        RAD_LOG(Renderer, Warning, "Failed to submit draw command buffer.");
         return;
     }
 
@@ -241,7 +241,7 @@ void Renderer::Loop()
 
 void Renderer::Deinitialize()
 {
-    RAD_LOG(ELogType::Renderer, ELogClass::Log, "Start renderer module deinitialization.");
+    RAD_LOG(Renderer, Log, "Start renderer module deinitialization.");
 
     VK_ASSERT(vkDeviceWaitIdle(*mRenderDevice));
 
@@ -273,7 +273,7 @@ void Renderer::Deinitialize()
         mAllRenderObjects[idx] = nullptr;
     }
 
-    RAD_LOG(ELogType::Renderer, ELogClass::Log, "Complete renderer module deinitialization.");
+    RAD_LOG(Renderer, Log, "Complete renderer module deinitialization.");
 }
 
 void Renderer::StartFrame()
@@ -356,7 +356,7 @@ bool Renderer::RecreateDependSwapChainObjects()
         return bResult;
     }
 
-    RAD_LOG(ELogType::Renderer, ELogClass::Log, "Recreate to objects depend on swap chain.");
+    RAD_LOG(Renderer, Log, "Recreate to objects depend on swap chain.");
     mbFrameBufferResized = false;
 
     return bResult;
@@ -417,7 +417,7 @@ bool Renderer::CreateRenderPass()
     VkResult result = vkCreateRenderPass(*mRenderDevice, &renderPassCreateInfo, nullptr, &mRenderPass);
     if (result != VK_SUCCESS)
     {
-        RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to create render pass.");
+        RAD_LOG(Renderer, Error, "Failed to create render pass.");
         return false;
     }
 
@@ -590,7 +590,7 @@ bool Renderer::CreateGraphicsPipeline()
         VkResult result = vkCreatePipelineLayout(*mRenderDevice, &pipelineLayoutCreateInfo, nullptr, &mPipelineLayout);
         if (result != VK_SUCCESS)
         {
-            RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to create pipeline layout.");
+            RAD_LOG(Renderer, Error, "Failed to create pipeline layout.");
             bResult = false;
             goto EXIT_SHADER_ALL;
         }
@@ -618,7 +618,7 @@ bool Renderer::CreateGraphicsPipeline()
         result = vkCreateGraphicsPipelines(*mRenderDevice, VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &mGraphicPipeline);
         if (result != VK_SUCCESS)
         {
-            RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to create graphics pipeline.");
+            RAD_LOG(Renderer, Error, "Failed to create graphics pipeline.");
             bResult = false;
             goto EXIT_SHADER_ALL;
         }
@@ -651,7 +651,7 @@ bool Renderer::CreateDescriptorSetLayout()
     const VkResult result = vkCreateDescriptorSetLayout(*mRenderDevice, &layoutCreateInfo, nullptr, &mDescriptorSetLayout);
     if (result != VK_SUCCESS)
     {
-        RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to create descriptor set layout.");
+        RAD_LOG(Renderer, Error, "Failed to create descriptor set layout.");
         return false;
     }
 
@@ -670,7 +670,7 @@ bool Renderer::CreateCommandPools()
     VkResult result = vkCreateCommandPool(*mRenderDevice, &commandPoolCreateInfo, nullptr, &mGraphicsCommandPool);
     if (result != VK_SUCCESS)
     {
-        RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to create graphics command pool.");
+        RAD_LOG(Renderer, Error, "Failed to create graphics command pool.");
         return false;
     }
 
@@ -679,7 +679,7 @@ bool Renderer::CreateCommandPools()
     result = vkCreateCommandPool(*mRenderDevice, &commandPoolCreateInfo, nullptr, &mTransferCommandPool);
     if (result != VK_SUCCESS)
     {
-        RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to create transfer command pool.");
+        RAD_LOG(Renderer, Error, "Failed to create transfer command pool.");
         return false;
     }
 
@@ -835,7 +835,7 @@ bool Renderer::CreateCommandBuffers()
     const VkResult result = vkAllocateCommandBuffers(*mRenderDevice, &allocInfo, mCommandBuffers.data());
     if (result != VK_SUCCESS)
     {
-        RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to allocate command buffers.");
+        RAD_LOG(Renderer, Error, "Failed to allocate command buffers.");
         return false;
     }
 
@@ -861,21 +861,21 @@ bool Renderer::CreateSyncObjects()
         VkResult result = vkCreateSemaphore(*mRenderDevice, &semaphoreCreateInfo, nullptr, &mImageAvailableSemaphores[i]);
         if (result != VK_SUCCESS)
         {
-            RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to create image available semaphore.");
+            RAD_LOG(Renderer, Error, "Failed to create image available semaphore.");
             return false;
         }
 
         result = vkCreateSemaphore(*mRenderDevice, &semaphoreCreateInfo, nullptr, &mRenderFinishedSemaphores[i]);
         if (result != VK_SUCCESS)
         {
-            RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to create render finished semaphore.");
+            RAD_LOG(Renderer, Error, "Failed to create render finished semaphore.");
             return false;
         }
 
         result = vkCreateFence(*mRenderDevice, &fenceCreateInfo, nullptr, &mInFlightFence[i]);
         if (result != VK_SUCCESS)
         {
-            RAD_LOG(ELogType::Renderer, ELogClass::Error, "Failed to create in-flight fence.");
+            RAD_LOG(Renderer, Error, "Failed to create in-flight fence.");
             return false;
         }
     }

@@ -21,6 +21,8 @@ public:
 
     bool Run();
 
+    void RequestExit();
+
     class Editor* GetEditor() const { return mEditor.get(); }
     class Renderer* GetRenderer() const { return mRenderer.get(); }
     class World* GetWorld() const { return mWorld.get(); }
@@ -44,7 +46,6 @@ private:
     static std::unique_ptr<Application> ApplicationInstance;
 
     std::vector<class Module*> mModules;
-
     std::unique_ptr<class Editor> mEditor;
     std::unique_ptr<class Renderer> mRenderer;
     std::unique_ptr<class World> mWorld;
@@ -54,6 +55,7 @@ private:
     const std::string mAppTitle;
     uint32_t mWidth;
     uint32_t mHeight;
+    bool mbNeedExit;
 
 };
 

@@ -15,4 +15,11 @@ public:
     void Loop() override;
     void Deinitialize() override;
 
+private:
+    bool mbMainWindowOpen;
+
+    uint32_t mLogColor;
+    uint32_t mWarningColor;
+    uint32_t mErrorColor;
+
 };

@@ -10,26 +10,31 @@
 
 std::unique_ptr<Logger> Logger::LoggerInstance = nullptr;
 
-Logger::Logger(const std::string& logPath, const std::string& logName)
-    : mLogPath(logPath)
-    , mLogName(logName)
+Logger::Logger(uint32_t maxLog)
+    : mMaxLogCount(maxLog)
 {
+}
+
+std::string Logger::Stringify(const LogBlock& logBlock)
+{
+    const std::string typeString = LogTypeStringTable[static_cast<uint32_t>(logBlock.LogType)];
+    const std::string classString = LogClassStringTable[static_cast<uint32_t>(logBlock.LogClass)];
+    return "[" + classString + "] " + typeString + ": " + logBlock.LogBody;
 }
 
 Logger::~Logger()
 {
 }
 
-void Logger::CreateLogger(const std::string& logPath, const std::string& logName)
+void Logger::CreateLogger(uint32_t maxLog)
 {
     if (LoggerInstance == nullptr)
     {
-        // danger code!
-        LoggerInstance = std::move(std::unique_ptr<Logger>(new Logger(logPath, logName)));
+        LoggerInstance = std::move(std::unique_ptr<Logger>(new Logger(maxLog)));
     }
 }
 
-void Logger::LogStatic(ELogType logType, ELogClass logClass, const std::string logBody)
+void Logger::LogStatic(ELogType logType, ELogClass logClass, const std::string& logBody)
 {
     if (LoggerInstance != nullptr)
     {
@@ -37,48 +42,44 @@ void Logger::LogStatic(ELogType logType, ELogClass logClass, const std::string l
     }
 }
 
-void Logger::PrintLogStatic()
+void Logger::ForEachRawLogs(std::function<void(const LogBlock&)> func)
 {
-    if (LoggerInstance != nullptr)
+    for (const LogBlock& log : mLogs)
     {
-        LoggerInstance->PrintLog();
+        func(log);
     }
 }
 
-void Logger::Log(ELogType logType, ELogClass logClass, const std::string logBody)
+void Logger::ForEachLogs(std::function<void(const std::string)> func)
 {
-    const std::string typeString = LogTypeStringTable[static_cast<uint32_t>(logType)];
-    const std::string classString = LogClassStringTable[static_cast<uint32_t>(logClass)];
-
-    const std::string fullLog = "[" + typeString + "] / " + classString + ": " + logBody;
-    mLogs.push_back(fullLog);
+    for (const LogBlock& log : mLogs)
+    {
+        func(Stringify(log));
+    }
 }
 
-void Logger::PrintLog() const
+void Logger::FlushLogs()
 {
-    std::filesystem::path absolutePath = std::filesystem::absolute(mLogPath);
-    std::filesystem::path fileName(mLogName);
-
-    if (std::filesystem::exists(absolutePath) == false)
+    while (mLogs.empty() == false)
     {
-        std::filesystem::create_directories(absolutePath);
+        mLogs.pop_back();
     }
-
-    absolutePath /= fileName;
-    if (std::filesystem::exists(absolutePath) == true)
-    {
-        std::filesystem::remove(absolutePath);
-    }
-    
-    std::ofstream fileOut;
-    fileOut.open(absolutePath);
-
-    for (const std::string& log : mLogs)
-    {
-        fileOut << log << "\n";
-    }
-    fileOut << std::endl;
-
-    fileOut.close();
 }
+
+void Logger::Log(ELogType logType, ELogClass logClass, const std::string& logBody)
+{
+    const int32_t overCount = mLogs.size() - mMaxLogCount;
+    for (int32_t i = 0; i < overCount; ++i)
+    {
+        mLogs.pop_front();
+    }
+
+    LogBlock logBlock;
+    logBlock.LogType = logType;
+    logBlock.LogClass = logClass;
+    logBlock.LogBody = logBody;
+
+    mLogs.push_back(logBlock);
+}
+
 #endif

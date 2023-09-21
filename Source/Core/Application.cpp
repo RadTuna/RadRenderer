@@ -24,6 +24,7 @@ Application::Application(uint32_t width, uint32_t height, const std::string& tit
     , mWidth(width)
     , mHeight(height)
     , mAppTitle(title)
+    , mbNeedExit(false)
 {
     // module load order
     mModules.push_back(mWorld.get());
@@ -49,7 +50,7 @@ void Application::CreateApplication(uint32_t width, uint32_t height, const std::
 
 bool Application::Run()
 {
-    RAD_LOG(ELogType::Core, ELogClass::Log, "Start application.");
+    RAD_LOG(Core, Log, "Start application.");
 
     // init imgui
     IMGUI_CHECKVERSION();
@@ -57,6 +58,7 @@ bool Application::Run()
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable; // Enable Docking
+    io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable; // Enable Multi-Viewport
 
     bool bSuccessInit = true;
     for (Module* myModule : mModules)
@@ -70,7 +72,7 @@ bool Application::Run()
 
     if (bSuccessInit)
     {
-        while (glfwWindowShouldClose(mWindow) == false)
+        while (glfwWindowShouldClose(mWindow) == false && mbNeedExit == false)
         {
             Loop();
 
@@ -86,9 +88,14 @@ bool Application::Run()
     // destory imgui
     ImGui::DestroyContext();
 
-    RAD_LOG(ELogType::Core, ELogClass::Log, "End application.");
+    RAD_LOG(Core, Log, "End application.");
 
     return bSuccessInit;
+}
+
+void Application::RequestExit()
+{
+    mbNeedExit = true;
 }
 
 void Application::Loop()
@@ -111,7 +118,7 @@ void Application::Loop()
 
 void Application::InitializeWindow()
 {
-    RAD_LOG(ELogType::Core, ELogClass::Log, "Start window creation.");
+    RAD_LOG(Core, Log, "Start window creation.");
     // pre setting for create window
     glfwInit();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -128,7 +135,7 @@ void Application::InitializeWindow()
     glfwSetWindowUserPointer(mWindow, this);
     glfwSetFramebufferSizeCallback(mWindow, &OnResizeFrameBuffer);
 
-    RAD_LOG(ELogType::Core, ELogClass::Log, "Complete window creation.");
+    RAD_LOG(Core, Log, "Complete window creation.");
 }
 
 void Application::DeinitializeWindow()

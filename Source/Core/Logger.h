@@ -1,10 +1,13 @@
 #pragma once
 
 #if !defined NDEBUG
+
 // External Include
-#include <vector>
+#include <deque>
 #include <string>
 #include <memory>
+#include <functional>
+
 
 enum class ELogType
 {
@@ -38,31 +41,40 @@ constexpr char* LogClassStringTable[static_cast<uint32_t>(ELogClass::Count)] = {
     "Error"
 };
 
+struct LogBlock
+{
+    ELogType LogType;
+    ELogClass LogClass;
+    std::string LogBody;
+};
+
 class Logger final
 {
 public:
     ~Logger();
 
     // Singleton pattern method
-    static void CreateLogger(const std::string& logPath, const std::string& logName);
+    static void CreateLogger(uint32_t maxLog);
     static Logger* GetLoggerOrNull() { return LoggerInstance.get(); }
 
-    static void LogStatic(ELogType logType, ELogClass logClass, const std::string logBody);
-    static void PrintLogStatic();
+    static std::string Stringify(const LogBlock& logBlock);
 
-    void Log(ELogType logType, ELogClass logClass, const std::string logBody);
-    void PrintLog() const;
+    static void LogStatic(ELogType logType, ELogClass logClass, const std::string& logBody);
+    void Log(ELogType logType, ELogClass logClass, const std::string& logBody);
+
+    void ForEachRawLogs(std::function<void(const LogBlock&)> func);
+    void ForEachLogs(std::function<void(const std::string)> func);
+    void FlushLogs();
 
 private:
-    Logger(const std::string& logPath, const std::string& logName);
+    Logger(uint32_t maxLog);
 
 private:
     // Singleton pattern property
     static std::unique_ptr<Logger> LoggerInstance;
 
-    std::vector<std::string> mLogs;
-    std::string mLogPath;
-    std::string mLogName;
+    std::deque<LogBlock> mLogs;
+    uint32_t mMaxLogCount;
 
 };
 #endif
@@ -74,8 +86,9 @@ private:
 #define SETUP_RAD_LOGGER(LogPath, LogName)
 #define PRINT_RAD_LOGGER()
 #else
-#define RAD_LOG(LogType, LogClass, LogBody) Logger::LogStatic(LogType, LogClass, LogBody)
+#define RAD_LOG(LogType, LogClass, LogBody) Logger::LogStatic(ELogType::##LogType, ELogClass::##LogClass, LogBody)
+#define RAD_DYN_LOG(LogType, LogClass, LogBody) Logger::LogStatic(LogType, LogClass, LogBody)
 #define RAD_QLOG(LogBody) Logger::LogStatic(ELogType::Unknown, ELogClass::Log, LogBody)
-#define SETUP_RAD_LOGGER(LogPath, LogName) Logger::CreateLogger(LogPath, LogName)
+#define SETUP_RAD_LOGGER(MaxLogCount) Logger::CreateLogger(MaxLogCount)
 #define PRINT_RAD_LOGGER() Logger::PrintLogStatic()
 #endif
