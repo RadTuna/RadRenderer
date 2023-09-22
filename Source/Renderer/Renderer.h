@@ -10,6 +10,7 @@
 
 // Internal Include
 #include "Core/Module.h"
+#include "Renderer/RenderObject.h"
 #include "Renderer/RenderDevice.h"
 #include "Renderer/SwapChain.h"
 
@@ -31,6 +32,15 @@ public:
 
     void StartFrame() override;
     void EndFrame() override;
+
+    template<typename Type, typename... Args>
+    Type* MakeRenderObject(Args&&... args)
+    {
+        std::unique_ptr<Type> renderObject = std::make_unique<Type>(std::forward<Args>(args)...);
+        Type* rawRenderObject = renderObject.get();
+        mAllRenderObjects.push_back(std::move(renderObject));
+        return rawRenderObject;
+    }
 
     bool RecreateDependSwapChainObjects();
     void DestroyDependSwapChainObjects();
@@ -74,13 +84,15 @@ private:
     VkQueue mGraphicsQueue;
     VkQueue mPresentQueue;
     VkQueue mTransferQueue;
-    VkRenderPass mRenderPass;
     VkDescriptorSetLayout mDescriptorSetLayout;
     VkPipelineLayout mPipelineLayout;
     VkPipeline mGraphicPipeline;
     VkCommandPool mGraphicsCommandPool;
     VkCommandPool mTransferCommandPool;
     VkDescriptorPool mDescriptorPool;
+
+    VkRenderPass mRenderPass;
+    VkRenderPass mViewportRenderPass;
 
     std::unique_ptr<VertexBuffer> mVertexBuffer;
     std::unique_ptr<IndexBuffer> mIndexBuffer;

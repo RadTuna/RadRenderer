@@ -28,9 +28,11 @@
 Renderer::Renderer(class Application* inApp)
     : Module(inApp)
     , mRenderDevice(nullptr)
+    , mSwapChain(nullptr)
     , mGraphicsQueue(VK_NULL_HANDLE)
     , mPresentQueue(VK_NULL_HANDLE)
     , mTransferQueue(VK_NULL_HANDLE)
+    , mDescriptorSetLayout(VK_NULL_HANDLE)
     , mRenderPass(VK_NULL_HANDLE)
     , mPipelineLayout(VK_NULL_HANDLE)
     , mGraphicPipeline(VK_NULL_HANDLE)
@@ -41,15 +43,6 @@ Renderer::Renderer(class Application* inApp)
     , mbFrameBufferResized(false)
     , mbCanRender(true)
 {
-    std::unique_ptr<RenderDevice> renderDevice = std::make_unique<RenderDevice>();
-    std::unique_ptr<RenderSwapChain> swapChain = std::make_unique<RenderSwapChain>();
-
-    mRenderDevice = renderDevice.get();
-    mSwapChain = swapChain.get();
-
-    // register all render objects;
-    mAllRenderObjects.push_back(std::move(renderDevice));
-    mAllRenderObjects.push_back(std::move(swapChain));
 }
 
 Renderer::~Renderer()
@@ -61,22 +54,14 @@ bool Renderer::Initialize()
     RAD_LOG(Renderer, Log, "Start renderer module initialization.");
     bool bResult = true;
 
-    bResult = mRenderDevice->Create(nullptr);
-    if (!bResult)
-    {
-        return bResult;
-    }
+    mRenderDevice = MakeRenderObject<RenderDevice>();
 
     // RenderDevice에서 생성한 VkQueue를 가져옴
     mGraphicsQueue = mRenderDevice->GetGraphicsQueue();
     mPresentQueue = mRenderDevice->GetPresentQueue();
     mTransferQueue = mRenderDevice->GetTransferQueue();
 
-    bResult = mSwapChain->Create(mRenderDevice);
-    if (!bResult)
-    {
-        return bResult;
-    }
+    mSwapChain = MakeRenderObject<RenderSwapChain>(mRenderDevice);
 
     bResult = CreateRenderPass();
     if (!bResult)
@@ -245,7 +230,7 @@ void Renderer::Deinitialize()
 
     VK_ASSERT(vkDeviceWaitIdle(*mRenderDevice));
 
-    assert(mInFlightFence.size() == mRenderFinishedSemaphores.size()
+    ASSERT(mInFlightFence.size() == mRenderFinishedSemaphores.size()
         && mRenderFinishedSemaphores.size() == mImageAvailableSemaphores.size());
     for (uint32_t i = 0; i < mInFlightFence.size(); ++i)
     {
@@ -268,7 +253,7 @@ void Renderer::Deinitialize()
     ImGui_ImplVulkan_Shutdown();
     ImGui_ImplGlfw_Shutdown();
 
-    for (int32_t idx = 0; idx < mAllRenderObjects.size(); ++idx)
+    for (int32_t idx = mAllRenderObjects.size() - 1; idx >= 0; --idx)
     {
         mAllRenderObjects[idx] = nullptr;
     }
@@ -311,7 +296,7 @@ bool Renderer::RecreateDependSwapChainObjects()
 
     DestroyDependSwapChainObjects();
 
-    bool bResult = mSwapChain->Create(mRenderDevice);
+    bool bResult = mSwapChain = MakeRenderObject<RenderSwapChain>(mRenderDevice);
     if (!bResult)
     {
         return bResult;
@@ -373,7 +358,7 @@ void Renderer::DestroyDependSwapChainObjects()
     vkDestroyPipelineLayout(*mRenderDevice, mPipelineLayout, nullptr);
     vkDestroyRenderPass(*mRenderDevice, mRenderPass, nullptr);
 
-    mSwapChain->Destroy();
+    mSwapChain = nullptr;
 }
 
 bool Renderer::CreateRenderPass()
@@ -796,7 +781,7 @@ bool Renderer::CreateDescriptorSets()
         return false;
     }
 
-    assert(mDescriptorSets.size() == mUniformBuffers.size());
+    ASSERT(mDescriptorSets.size() == mUniformBuffers.size());
     for (size_t i = 0; i < mDescriptorSets.size(); ++i)
     {
         VkDescriptorBufferInfo bufferInfo = {};
@@ -912,7 +897,7 @@ bool Renderer::CreateImGuiBackend()
     allocInfo.commandPool = mTransferCommandPool;
     allocInfo.commandBufferCount = 1;
 
-    VkCommandBuffer commandBuffer;
+    VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
     VK_ASSERT(vkAllocateCommandBuffers(*mRenderDevice, &allocInfo, &commandBuffer));
 
     VkCommandBufferBeginInfo beginInfo = {};
@@ -969,7 +954,7 @@ void Renderer::RecordRenderCommands(uint32_t imageIndex)
         vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
         vkCmdBindIndexBuffer(commandBuffer, mIndexBuffer->GetVkBuffer(), 0, VK_INDEX_TYPE_UINT16);
 
-        assert(mDescriptorSets.size() == mCommandBuffers.size());
+        ASSERT(mDescriptorSets.size() == mCommandBuffers.size());
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, mPipelineLayout, 0, 1, &mDescriptorSets[mCurrentFrame], 0, nullptr);
 
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(Vertex::Indices.size()), 1, 0, 0, 0);

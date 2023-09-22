@@ -9,10 +9,10 @@
 
 #pragma region Macros
 
-#if defined NDEBUG
-#define VK_ASSERT(Return)
-#else
+#if DEBUG_BUILD
 #define VK_ASSERT(Return) if ((Return) != VK_SUCCESS) { assert(false); }
+#else
+#define VK_ASSERT(Return)
 #endif
 
 #pragma endregion

@@ -12,25 +12,13 @@
 #include "Renderer/Renderer.h"
 
 
-RenderSwapChain::RenderSwapChain()
-    : mRenderDevice(nullptr)
+RenderSwapChain::RenderSwapChain(RenderDevice* renderDevice)
+    : RenderObject(renderDevice)
     , mSwapChain(VK_NULL_HANDLE)
     , mExtent{ 0, }
     , mImageFormat(VK_FORMAT_UNDEFINED)
 {
-}
-
-RenderSwapChain::~RenderSwapChain()
-{
-    Destroy();
-}
-
-bool RenderSwapChain::Create(RenderDevice* device)
-{
-    assert(device != nullptr);
-    mRenderDevice = device;
-
-    const SwapChainSupportDetails details = device->QuerySwapChainSupport();
+    const SwapChainSupportDetails details = mRenderDevice->QuerySwapChainSupport();
     const VkSurfaceFormatKHR surfaceFormat = ChooseSwapSurfaceFormat(details.Formats);
     const VkPresentModeKHR presentMode = ChooseSwapPresentMode(details.PresentModes);
     const VkExtent2D extent = ChooseSwapExtent(details.Capabilities);
@@ -41,12 +29,12 @@ bool RenderSwapChain::Create(RenderDevice* device)
         imageCount = details.Capabilities.maxImageCount;
     }
 
-    assert(Renderer::MAX_FRAME_IN_FLIGHT >= details.Capabilities.minImageCount);
+    ASSERT(Renderer::MAX_FRAME_IN_FLIGHT >= details.Capabilities.minImageCount);
     imageCount = std::min(imageCount, Renderer::MAX_FRAME_IN_FLIGHT);
 
     VkSwapchainCreateInfoKHR swapChainCreateInfo = {};
     swapChainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-    swapChainCreateInfo.surface = device->GetSurface();
+    swapChainCreateInfo.surface = mRenderDevice->GetSurface();
     swapChainCreateInfo.minImageCount = imageCount;
     swapChainCreateInfo.imageFormat = surfaceFormat.format;
     swapChainCreateInfo.imageColorSpace = surfaceFormat.colorSpace;
@@ -54,8 +42,8 @@ bool RenderSwapChain::Create(RenderDevice* device)
     swapChainCreateInfo.imageArrayLayers = 1;
     swapChainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
-    const QueueFamilyIndices indices = device->FindQueueFamilies();
-    assert(QueueFamilyIndices::IsValidQueueFamilyIndices(indices) == true);
+    const QueueFamilyIndices indices = mRenderDevice->FindQueueFamilies();
+    ASSERT(QueueFamilyIndices::IsValidQueueFamilyIndices(indices) == true);
     std::vector<uint32_t> uniqueQueueFamilies = QueueFamilyIndices::GetUniqueFamilies(indices);
 
     // Graphics queue와 Transfer queue가 다르도록 강제하기에 CONCURRENT 모드 사용.
@@ -70,11 +58,11 @@ bool RenderSwapChain::Create(RenderDevice* device)
     swapChainCreateInfo.clipped = VK_TRUE;
     swapChainCreateInfo.oldSwapchain = VK_NULL_HANDLE;
 
-    VkResult result = vkCreateSwapchainKHR(*device, &swapChainCreateInfo, nullptr, &mSwapChain);
+    VkResult result = vkCreateSwapchainKHR(*mRenderDevice, &swapChainCreateInfo, nullptr, &mSwapChain);
     if (result != VK_SUCCESS)
     {
         RAD_LOG(Renderer, Error, "Failed to create Vulkan swap chain.");
-        return false;
+        ASSERT_NEVER();
     }
 
     mExtent = extent;
@@ -83,9 +71,9 @@ bool RenderSwapChain::Create(RenderDevice* device)
     mPresentMode = presentMode;
 
     uint32_t swapImageCount = 0;
-    VK_ASSERT(vkGetSwapchainImagesKHR(*device, mSwapChain, &swapImageCount, nullptr));
+    VK_ASSERT(vkGetSwapchainImagesKHR(*mRenderDevice, mSwapChain, &swapImageCount, nullptr));
     mSwapChainImages.resize(swapImageCount);
-    VK_ASSERT(vkGetSwapchainImagesKHR(*device, mSwapChain, &swapImageCount, mSwapChainImages.data()));
+    VK_ASSERT(vkGetSwapchainImagesKHR(*mRenderDevice, mSwapChain, &swapImageCount, mSwapChainImages.data()));
 
     // Begin create swap chain image views
     mSwapChainImageViews.resize(mSwapChainImages.size());
@@ -106,18 +94,18 @@ bool RenderSwapChain::Create(RenderDevice* device)
         imageViewCreateInfo.subresourceRange.baseArrayLayer = 0;
         imageViewCreateInfo.subresourceRange.layerCount = 1;
 
-        result = vkCreateImageView(*device, &imageViewCreateInfo, nullptr, &mSwapChainImageViews[i]);
+        result = vkCreateImageView(*mRenderDevice, &imageViewCreateInfo, nullptr, &mSwapChainImageViews[i]);
         if (result != VK_SUCCESS)
         {
             RAD_LOG(Renderer, Error, "Failed to create swap chain image view.");
-            return false;
+            ASSERT_NEVER();
         }
     }
 
-    return true;
+    return;
 }
 
-void RenderSwapChain::Destroy()
+RenderSwapChain::~RenderSwapChain()
 {
     for (VkFramebuffer frameBuffer : mFrameBuffers)
     {

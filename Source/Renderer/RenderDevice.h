@@ -37,9 +37,6 @@ public:
     RenderDevice();
     virtual ~RenderDevice();
 
-    virtual bool Create(RenderDevice* renderDevice) override;
-    virtual void Destroy() override;
-
     QueueFamilyIndices FindQueueFamilies() const;
     QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice physicalDevice) const;
     SwapChainSupportDetails QuerySwapChainSupport() const;

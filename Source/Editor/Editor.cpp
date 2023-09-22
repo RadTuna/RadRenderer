@@ -93,7 +93,7 @@ void Editor::Loop()
                     color = static_cast<ImU32>(mErrorColor);
                     break;
                 default:
-                    assert(false);
+                    ASSERT_NEVER();
                     break;
                 }
 

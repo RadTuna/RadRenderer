@@ -1,7 +1,8 @@
 
-#if defined _DEBUG
 // Primary Include
 #include "Logger.h"
+
+#if DEBUG_BUILD
 
 // External Include
 #include <fstream>

@@ -9,11 +9,21 @@ class RenderDevice;
 class RenderObject
 {
 public:
-    RenderObject() = default;
+    RenderObject(RenderDevice* renderDevice)
+        : RenderObject(renderDevice, false)
+    { }
+    RenderObject(RenderDevice* renderDevice, bool bAllowNull)
+        : mRenderDevice(renderDevice)
+    {
+        if (bAllowNull == false)
+        {
+            ASSERT(mRenderDevice != nullptr);
+        }
+    }
+
     virtual ~RenderObject() = default;
 
-    // RenderObject interfaces...
-    virtual bool Create(RenderDevice* renderDevice) = 0;
-    virtual void Destroy() = 0;
+protected:
+    RenderDevice* mRenderDevice;
 
 };

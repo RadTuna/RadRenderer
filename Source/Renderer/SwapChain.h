@@ -15,11 +15,8 @@
 class RenderSwapChain final : public RenderObject
 {
 public:
-    RenderSwapChain();
+    RenderSwapChain(RenderDevice* renderDevice);
     virtual ~RenderSwapChain();
-
-    virtual bool Create(RenderDevice* device) override;
-    virtual void Destroy() override;
 
     bool CreateFrameBuffers(VkRenderPass renderPass);
 
@@ -40,7 +37,6 @@ private:
     VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilites) const;
 
 private:
-    RenderDevice* mRenderDevice;
     VkSwapchainKHR mSwapChain;
 
     std::vector<VkImage> mSwapChainImages;

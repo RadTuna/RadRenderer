@@ -1,6 +1,8 @@
 #pragma once
 
-#if !defined NDEBUG
+#include "Core/CoreHeader.h"
+
+#if DEBUG_BUILD
 
 // External Include
 #include <deque>
@@ -80,15 +82,19 @@ private:
 #endif
 
 
-#if defined NDEBUG
-#define RAD_LOG(LogType, LogClass, LogBody)
-#define RAD_QLOG(LogBody)
-#define SETUP_RAD_LOGGER(LogPath, LogName)
-#define PRINT_RAD_LOGGER()
-#else
+#if DEBUG_BUILD
+
 #define RAD_LOG(LogType, LogClass, LogBody) Logger::LogStatic(ELogType::##LogType, ELogClass::##LogClass, LogBody)
 #define RAD_DYN_LOG(LogType, LogClass, LogBody) Logger::LogStatic(LogType, LogClass, LogBody)
 #define RAD_QLOG(LogBody) Logger::LogStatic(ELogType::Unknown, ELogClass::Log, LogBody)
 #define SETUP_RAD_LOGGER(MaxLogCount) Logger::CreateLogger(MaxLogCount)
 #define PRINT_RAD_LOGGER() Logger::PrintLogStatic()
+
+#else
+
+#define RAD_LOG(LogType, LogClass, LogBody)
+#define RAD_QLOG(LogBody)
+#define SETUP_RAD_LOGGER(MaxLogCount)
+#define PRINT_RAD_LOGGER()
+
 #endif

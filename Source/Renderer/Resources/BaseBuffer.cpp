@@ -14,7 +14,7 @@ BaseBuffer::BaseBuffer(RenderDevice* inRenderDevice, uint64_t inBufferSize)
     , mStagingBufferMemory(VK_NULL_HANDLE)
     , mBufferSize(inBufferSize)
 {
-    assert(mRenderDevice != nullptr);
+    ASSERT(mRenderDevice != nullptr);
 }
 
 BaseBuffer::~BaseBuffer()
@@ -123,7 +123,7 @@ void BaseBuffer::MapStagingBuffer(void* inData, uint64_t size)
 {
     size = std::min(size, mBufferSize);
 
-    void* mappedData;
+    void* mappedData = nullptr;
     VK_ASSERT(vkMapMemory(*mRenderDevice, mStagingBufferMemory, 0, VK_WHOLE_SIZE, 0, &mappedData));
     memcpy(mappedData, inData, size);
     vkUnmapMemory(*mRenderDevice, mStagingBufferMemory);
@@ -137,7 +137,7 @@ void BaseBuffer::TransferBuffer(VkCommandPool commandPool)
     allocInfo.commandPool = commandPool;
     allocInfo.commandBufferCount = 1;
 
-    VkCommandBuffer commandBuffer;
+    VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
     VK_ASSERT(vkAllocateCommandBuffers(*mRenderDevice, &allocInfo, &commandBuffer));
 
     VkCommandBufferBeginInfo beginInfo = {};
@@ -165,7 +165,7 @@ void BaseBuffer::TransferBuffer(VkCommandPool commandPool)
     if (submitResult != VK_SUCCESS)
     {
         RAD_LOG(Renderer, Error, "Failed to submit transfer command buffer.");
-        assert(false);
+        ASSERT_NEVER();
     }
 
     VK_ASSERT(vkQueueWaitIdle(mRenderDevice->GetTransferQueue()));

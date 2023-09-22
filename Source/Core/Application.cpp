@@ -150,7 +150,7 @@ void Application::DeinitializeWindow()
 void Application::OnResizeFrameBuffer(GLFWwindow* window, int width, int height)
 {
     Application* self = reinterpret_cast<Application*>(glfwGetWindowUserPointer(window));
-    assert(self != nullptr);
+    ASSERT(self != nullptr);
 
     self->mRenderer->FrameBufferResized();
     const bool bStopRender = width == 0 || height == 0;

@@ -36,7 +36,8 @@ std::vector<uint32_t> QueueFamilyIndices::GetUniqueFamilies(const QueueFamilyInd
 constexpr char* DEFAULT_VALIDATION_LAYER_NAME = "VK_LAYER_KHRONOS_validation";
 
 RenderDevice::RenderDevice()
-    : mInstance(VK_NULL_HANDLE)
+    : RenderObject(nullptr, /*bAllowNull*/true)
+    , mInstance(VK_NULL_HANDLE)
     , mDebugMessenger(VK_NULL_HANDLE)
     , mPhysicalDevice(VK_NULL_HANDLE)
     , mDevice(VK_NULL_HANDLE)
@@ -52,51 +53,40 @@ RenderDevice::RenderDevice()
 
     // required layer
     mValidationLayers.push_back(DEFAULT_VALIDATION_LAYER_NAME);
-}
 
-RenderDevice::~RenderDevice()
-{
-    Destroy();
-}
-
-bool RenderDevice::Create(RenderDevice* renderDevice)
-{
     bool bResult = true;
-
     bResult = CreateInstance();
     if (!bResult)
     {
-        return bResult;
+        ASSERT_NEVER();
     }
 
     bResult = CreateDebugMessenger();
     if (!bResult)
     {
-        return bResult;
+        ASSERT_NEVER();
     }
 
     bResult = CreateSurface();
     if (!bResult)
     {
-        return bResult;
+        ASSERT_NEVER();
     }
 
     bResult = PickPhysicalDevice();
     if (!bResult)
     {
-        return bResult;
+        ASSERT_NEVER();
     }
 
     bResult = CreateLogicalDevice();
     if (!bResult)
     {
-        return bResult;
+        ASSERT_NEVER();
     }
-
-    return bResult;
 }
 
-void RenderDevice::Destroy()
+RenderDevice::~RenderDevice()
 {
     if (mDevice != VK_NULL_HANDLE)
     {
@@ -109,7 +99,7 @@ void RenderDevice::Destroy()
         vkDestroySurfaceKHR(mInstance, mSurface, nullptr);
         mSurface = VK_NULL_HANDLE;
     }
-#if !defined NDEBUG
+#if DEBUG_BUILD
     if (mbEnableValidationLayer && mDebugMessenger != VK_NULL_HANDLE)
     {
         VkHelper::DestroyDebugUtilsMessengerEXT(mInstance, mDebugMessenger, nullptr);
@@ -244,9 +234,7 @@ bool RenderDevice::CreateInstance()
     GetRequiredExtensions(&requiredExtensions);
     instanceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(requiredExtensions.size());
     instanceCreateInfo.ppEnabledExtensionNames = requiredExtensions.data();
-#if defined NDEBUG 
-    vkInstanceCreateInfo.enabledLayerCount = 0;
-#else
+#if DEBUG_BUILD
     VkDebugUtilsMessengerCreateInfoEXT debugMessengerCreateInfo = {};
     if (mbEnableValidationLayer)
     {
@@ -260,6 +248,8 @@ bool RenderDevice::CreateInstance()
     {
         instanceCreateInfo.enabledLayerCount = 0;
     }
+#else
+    instanceCreateInfo.enabledLayerCount = 0;
 #endif
 
     VkResult result = vkCreateInstance(&instanceCreateInfo, nullptr, &mInstance);
@@ -291,7 +281,7 @@ bool RenderDevice::CreateInstance()
     VK_ASSERT(vkEnumerateInstanceLayerProperties(&vkLayerCount, nullptr));
     mVkLayers.resize(vkLayerCount);
     VK_ASSERT(vkEnumerateInstanceLayerProperties(&vkLayerCount, mVkLayers.data()));
-#if !defined NDEBUG 
+#if DEBUG_BUILD
     if (mbEnableValidationLayer && !CheckValidationLayerSupport())
     {
         RAD_LOG(Renderer, Error, "Tried to use the validation layer, but does not exist.");
@@ -304,7 +294,7 @@ bool RenderDevice::CreateInstance()
 
 bool RenderDevice::CreateDebugMessenger()
 {
-#if !defined NDEBUG 
+#if DEBUG_BUILD
     VkDebugUtilsMessengerCreateInfoEXT createInfo = {};
     PopulateDebugMessengerCreateInfo(createInfo);
 
@@ -400,7 +390,7 @@ bool RenderDevice::CreateLogicalDevice()
     deviceCreateInfo.pEnabledFeatures = &deviceFeatures;
     deviceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(mDeviceExtensions.size());
     deviceCreateInfo.ppEnabledExtensionNames = mDeviceExtensions.data();
-#if !defined NDEBUG
+#if DEBUG_BUILD
     if (mbEnableValidationLayer)
     {
         deviceCreateInfo.enabledLayerCount = static_cast<uint32_t>(mValidationLayers.size());
@@ -439,7 +429,7 @@ void RenderDevice::GetRequiredExtensions(std::vector<const char*>* outExtensions
         outExtensions->push_back(glfwExtensions[i]);
     }
 
-#if !defined NDEBUG 
+#if DEBUG_BUILD 
     if (mbEnableValidationLayer)
     {
         outExtensions->push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
