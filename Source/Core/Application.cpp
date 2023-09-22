@@ -53,12 +53,15 @@ bool Application::Run()
     RAD_LOG(Core, Log, "Start application.");
 
     // init imgui
+    static constexpr char* IMGUI_INI_FILE_PATH = "../Config/imgui.ini";
+
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable; // Enable Docking
     io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable; // Enable Multi-Viewport
+    io.IniFilename = IMGUI_INI_FILE_PATH;
 
     bool bSuccessInit = true;
     for (Module* myModule : mModules)
