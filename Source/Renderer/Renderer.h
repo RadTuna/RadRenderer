@@ -18,6 +18,13 @@
 class VertexBuffer;
 class IndexBuffer;
 class UniformBuffer;
+class RenderPass;
+
+struct ImGuiVkResource
+{
+    VkDescriptorPool DescriptorPool;
+    VkRenderPass RenderPass;
+};
 
 class Renderer final : public Module 
 {
@@ -51,13 +58,10 @@ public:
 
 private:
     // for Initialize
-    bool CreateRenderPass();
     bool CreateDescriptorSetLayout();
     bool CreateGraphicsPipeline();
     bool CreateCommandPools();
-    bool CreateVertexBuffer();
-    bool CreateIndexBuffer();
-    bool CreateUniformBuffer();
+    bool CreateBuffers();
     bool CreateDescriptorPool();
     bool CreateDescriptorSets();
     bool CreateCommandBuffers();
@@ -80,19 +84,19 @@ private:
     std::vector<std::unique_ptr<RenderObject>> mAllRenderObjects;
     RenderDevice* mRenderDevice;
     RenderSwapChain* mSwapChain;
+    RenderPass* mRenderPass;
 
     VkQueue mGraphicsQueue;
     VkQueue mPresentQueue;
     VkQueue mTransferQueue;
+
     VkDescriptorSetLayout mDescriptorSetLayout;
     VkPipelineLayout mPipelineLayout;
-    VkPipeline mGraphicPipeline;
+    VkPipeline mGraphicsPipeline;
     VkCommandPool mGraphicsCommandPool;
     VkCommandPool mTransferCommandPool;
     VkDescriptorPool mDescriptorPool;
-
-    VkRenderPass mRenderPass;
-    VkRenderPass mViewportRenderPass;
+    ImGuiVkResource mImGuiVkResource;
 
     std::unique_ptr<VertexBuffer> mVertexBuffer;
     std::unique_ptr<IndexBuffer> mIndexBuffer;
@@ -101,6 +105,7 @@ private:
     std::vector<VkSemaphore> mImageAvailableSemaphores;
     std::vector<VkSemaphore> mRenderFinishedSemaphores;
     std::vector<VkFence> mInFlightFence;
+    std::vector<VkDescriptorSet> mInFlightDescriptorSets;
     uint32_t mCurrentFrame;
 
     std::vector<VkCommandBuffer> mCommandBuffers;
